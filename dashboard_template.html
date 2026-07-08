@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Data Center: Supply vs Shortfall Discrepancy</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;  /* blue  - model / supply */
+    --series-2: #1baf7a;  /* aqua  - colocation */
+    --series-3: #eda100;  /* yellow- client */
+    --series-4: #008300;  /* green - solutions */
+    --series-5: #eb6834;  /* orange- hyperscaler */
+    --critical: #d03b3b;
+    --good: #0ca30c;
+    --warning: #fab219;
+    --shadow: 0 1px 2px rgba(11,11,11,0.05), 0 1px 3px rgba(11,11,11,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface-1: #1a1a19;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-2: #199e70;
+      --series-3: #c98500;
+      --series-4: #008300;
+      --series-5: #d95926;
+      --critical: #e66767;
+      --good: #0ca30c;
+      --warning: #fab219;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.45; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  nav.pagenav { display: flex; gap: 8px; margin-bottom: 22px; }
+  nav.pagenav a {
+    font-size: 13px; padding: 6px 14px; border-radius: 999px; text-decoration: none;
+    border: 1px solid var(--border); color: var(--text-secondary); background: var(--surface-1);
+  }
+  nav.pagenav a.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header .sub { color: var(--text-secondary); font-size: 15px; margin: 0 0 4px; }
+  header .src { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+  .banner {
+    margin: 22px 0 26px; padding: 14px 16px; border-radius: 10px;
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface-1));
+    border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);
+  }
+  .banner b { color: var(--text-primary); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 30px; }
+  .kpi {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 16px 14px; box-shadow: var(--shadow);
+  }
+  .kpi .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .kpi .val { font-size: 30px; font-weight: 650; margin: 6px 0 2px; letter-spacing: -0.02em; }
+  .kpi .unit { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+  .kpi .note { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+  .kpi.accent-needed .val { color: var(--critical); }
+  .kpi.accent-supply .val { color: var(--series-1); }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 20px; box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .card h2 { font-size: 16.5px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .card .cap { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+  .card .cap .cell { color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .chart-box { position: relative; height: 340px; }
+  .chart-box.tall { height: 380px; }
+  .chart-box.short { height: 300px; }
+  .controls { display: flex; gap: 6px; margin: 2px 0 14px; }
+  .controls button {
+    font: inherit; font-size: 12.5px; padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .controls button.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  .takeaway { font-size: 13px; color: var(--text-secondary); margin-top: 12px; padding-left: 12px;
+    border-left: 3px solid var(--series-1); }
+  .takeaway b { color: var(--text-primary); }
+  footer { margin-top: 34px; color: var(--muted); font-size: 12px; text-align: center; }
+  @media (max-width: 820px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
+<div class="wrap">
+  <nav class="pagenav">
+    <a href="dashboard.html" class="active">Supply vs Shortfall</a>
+    <a href="chips_dashboard.html">Chips &amp; Buildout</a>
+  </nav>
+  <header>
+    <h1>US Data Center &mdash; Supply vs Shortfall Discrepancy</h1>
+    <p class="sub">Does the facility-level supply model corroborate the client's US power-shortfall analysis?</p>
+    <p class="src" id="src-line"></p>
+  </header>
+
+  <div class="banner" id="caveat">
+    <b>Read me &mdash; reconciliation caveats.</b>
+    (1) <b>Vintage:</b> the supply model is dated <span id="cv-model"></span>; the shortfall analysis is <span id="cv-client"></span> &mdash; differing as-of dates partly explain gaps.
+    (2) <b>Scope:</b> supply is filtered to <b>US-only</b> building-level facilities to match the US-only shortfall.
+    (3) <b>Sectors:</b> the supply model classifies only <b>hyperscaler vs colocation</b> &mdash; it has no "bitcoin miner" or "neo cloud" type. In the shortfall tab, bitcoin sites appear as a <i>supply solution</i> (Solution&nbsp;#4), not demand.
+    (4) Shortfall figures are in GW; supply is converted from MW (&divide;1000).
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h2>1. US Power Shortfall Waterfall</h2>
+    <p class="cap">From <span class="cell">US Shortfall Analysis</span>: demand, less capacity already under construction and grid access, gives the shortfall &mdash; then "Time to Power" solutions net it out. <span class="cell">(cells C3:F13)</span></p>
+    <div class="controls" id="wf-controls">
+      <button data-scen="low">Low</button>
+      <button data-scen="mid" class="active">Midpoint</button>
+      <button data-scen="high">High</button>
+    </div>
+    <div class="chart-box tall"><canvas id="waterfall"></canvas></div>
+    <p class="takeaway" id="wf-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>2. Does Model Supply Cover the "Needed" Shortfall?</h2>
+    <p class="cap">Model US Under-Construction and Planned+UC capacity vs the <b>37.71 GW</b> shortfall "needed" line. <span class="cell">(NA Data Center Supply cols BV, CD, CE, filtered Country=USA)</span></p>
+    <div class="grid2">
+      <div class="chart-box"><canvas id="cover"></canvas></div>
+      <div class="chart-box"><canvas id="cover2"></canvas></div>
+    </div>
+    <p class="takeaway" id="cover-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>3. US Capacity Year-over-Year (2017&ndash;2032)</h2>
+    <p class="cap">Year-end US installed capacity from the supply model, split hyperscaler vs colocation, with the total trend line. The shaded band marks the 2026&ndash;28 shortfall horizon. <span class="cell">(cols K&ndash;Z, by Type CX)</span></p>
+    <div class="chart-box tall"><canvas id="yoy"></canvas></div>
+    <p class="takeaway" id="yoy-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>4. Where the Two Models Disagree</h2>
+    <p class="cap">Side-by-side of the client's assumptions vs the independent supply model over the same 2026&ndash;28 US horizon.</p>
+    <div class="grid2">
+      <div class="chart-box short"><canvas id="gap1"></canvas></div>
+      <div class="chart-box short"><canvas id="gap2"></canvas></div>
+    </div>
+    <p class="takeaway" id="gap-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>5. US Planned + UC Pipeline &mdash; Concentration</h2>
+    <p class="cap">Top US states and companies by Planned+UC capacity in the supply model. <span class="cell">(cols CP State, CV Company)</span></p>
+    <div class="grid2">
+      <div class="chart-box"><canvas id="states"></canvas></div>
+      <div class="chart-box"><canvas id="companies"></canvas></div>
+    </div>
+  </div>
+
+  <footer>Generated by <code>build_dashboard.py</code> &middot; self-contained &middot; charts via vendored Chart.js</footer>
+</div>
+
+<script>/*__CHARTJS__*/</script>
+<script>
+const DATA = __DATA__;
+const charts = [];
+
+function cssv(name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+function alpha(hex, a) {
+  const h = hex.replace('#',''); const n = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  return 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')';
+}
+function fmt(v, d) { return (v==null? '' : Number(v).toFixed(d==null?1:d)); }
+
+// Custom plugin: horizontal reference line at a given y value
+const refLine = {
+  id: 'refLine',
+  afterDatasetsDraw(chart, args, opts) {
+    if (!opts || opts.value==null) return;
+    const {ctx, chartArea:{left,right}, scales:{y}} = chart;
+    const yy = y.getPixelForValue(opts.value);
+    ctx.save();
+    ctx.setLineDash([5,4]); ctx.lineWidth = 1.5; ctx.strokeStyle = opts.color;
+    ctx.beginPath(); ctx.moveTo(left, yy); ctx.lineTo(right, yy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = opts.color; ctx.font = '600 12px system-ui, sans-serif';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText(opts.label + '  ' + fmt(opts.value) + ' GW', right - 4, yy - 4);
+    ctx.restore();
+  }
+};
+Chart.register(refLine);
+
+function baseOpts(text, muted, grid) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: text, boxWidth: 12, boxHeight: 12, usePointStyle: true, font: {size: 12} } },
+      tooltip: { callbacks: {} }
+    },
+    scales: {
+      x: { ticks: { color: muted, font: {size: 11} }, grid: { display: false }, border: { color: cssv('--baseline') } },
+      y: { ticks: { color: muted, font: {size: 11} }, grid: { color: grid }, border: { display: false },
+           title: { display: true, text: 'GW', color: muted, font: {size: 11} } }
+    }
+  };
+}
+
+function buildKpis() {
+  const r = DATA.reconciliation;
+  const tiles = [
+    {cls:'accent-needed', label:'Needed (shortfall)', val:fmt(r.needed_shortfall), unit:'GW', note:'Power Shortfall before "Time to Power" solutions'},
+    {cls:'accent-supply', label:'Model US Planned + UC', val:fmt(r.model_us_pluc,0), unit:'GW', note:'Coverage x'+fmt(r.coverage_ratio_pluc,1)+' vs needed'},
+    {cls:'', label:'Model US Under Construction', val:fmt(r.model_us_uc), unit:'GW', note:'Client assumed '+fmt(r.client_uc)+' GW ('+fmt((r.model_us_uc/r.client_uc-1)*100,0)+'% higher)'},
+    {cls:'', label:'Model US Additions 26-28', val:fmt(r.model_us_additions_26_28), unit:'GW', note:'vs client demand '+fmt(r.client_demand)+' GW'},
+  ];
+  document.getElementById('kpis').innerHTML = tiles.map(t =>
+    '<div class="kpi '+t.cls+'"><div class="label">'+t.label+'</div>'+
+    '<div class="val">'+t.val+' <span class="unit">'+t.unit+'</span></div>'+
+    '<div class="note">'+t.note+'</div></div>').join('');
+}
+
+let wfScenario = 'mid';
+
+function buildWaterfall(text, muted, grid) {
+  const s = DATA.shortfall;
+  const sols = s.solutions.map(x => ({name:x.name, v:x[wfScenario]}));
+  const cBlue=cssv('--series-1'), cRed=cssv('--critical'), cGreen=cssv('--series-4'), cYellow=cssv('--series-3');
+
+  // Floating-bar waterfall: each datapoint is a [start, end] pair (single dataset).
+  const rows = [];
+  let run = 0;
+  const total = (label, val, color) => { rows.push({label, range:[0, val], mag: val, color}); run = val; };
+  const step = (label, delta, color) => {
+    const start = run; run += delta;
+    rows.push({label, range:[Math.min(start, run), Math.max(start, run)], mag: delta, color});
+  };
+  total(['Demand','26-28'], s.demand_2026_28, cYellow);
+  step('Under Constr.', s.less_under_construction, cGreen);
+  step('Grid Access', s.less_grid_access, cGreen);
+  total('Shortfall', s.shortfall_before_solutions, cRed);
+  sols.forEach(x => {
+    const lab = x.name.replace("Site DC at Op'l ", '').replace(' Fuel Cells', '').replace(' Turbines', '');
+    step(lab, -x.v, cGreen);
+  });
+  const net = run;
+  rows.push({label:['Net','(all built)'], range:[Math.min(0, net), Math.max(0, net)], mag: net, color: net > 0.5 ? cRed : cGreen});
+
+  const mags = rows.map(r => r.mag);
+  charts.push(new Chart(document.getElementById('waterfall'), {
+    type: 'bar',
+    data: { labels: rows.map(r => r.label),
+      datasets: [{label:'GW', data: rows.map(r => r.range), backgroundColor: rows.map(r => r.color),
+        borderRadius:4, borderSkipped:false}] },
+    options: Object.assign(baseOpts(text,muted,grid), {
+      plugins: { legend:{display:false},
+        tooltip:{ callbacks:{ label:(i)=> (mags[i.dataIndex]>=0?'+':'') + fmt(mags[i.dataIndex]) + ' GW' } } },
+      scales: {
+        x:{ ticks:{color:muted, font:{size:10.5}, maxRotation:35, minRotation:35}, grid:{display:false}, border:{color:cssv('--baseline')} },
+        y:{ suggestedMax: s.demand_2026_28 * 1.08, ticks:{color:muted}, grid:{color:grid}, border:{display:false},
+            title:{display:true,text:'GW',color:muted,font:{size:11}} }
+      }
+    })
+  }));
+  const solSum = sols.reduce((a,x)=>a+x.v, 0);
+  const wNet = Math.abs(DATA.shortfall.net_shortfall[wfScenario]); // sheet's probability-weighted residual
+  const rawTxt = net <= 0 ? ('fully close it (<b>'+fmt(-net)+' GW</b> to spare)') : ('leave <b>'+fmt(net)+' GW</b> still short');
+  document.getElementById('wf-take').innerHTML =
+    'At the <b>'+wfScenario+'</b> case the four "Time to Power" solutions total <b>'+fmt(solSum)+' GW</b> against the '+fmt(DATA.shortfall.shortfall_before_solutions)+' GW shortfall. '+
+    'Delivered in full they would '+rawTxt+'. On the client\'s <b>probability-weighted</b> basis (sheet row 16) the reported residual shortfall is <b>'+fmt(wNet)+' GW</b> &mdash; the difference is execution risk (each solution &times; its probability of success).';
+}
+
+function buildCover(text, muted, grid) {
+  const r = DATA.reconciliation;
+  charts.push(new Chart(document.getElementById('cover'), {
+    type:'bar',
+    data:{ labels:[['US Under','Construction'],['US Planned','+ UC']],
+      datasets:[{label:'GW', data:[r.model_us_uc, r.model_us_pluc],
+        backgroundColor:[cssv('--series-2'), cssv('--series-1')], borderRadius:4, borderSkipped:false}] },
+    options: Object.assign(baseOpts(text,muted,grid), {
+      plugins:{ legend:{display:false}, refLine:{value:r.needed_shortfall, color:cssv('--critical'), label:'Needed'},
+        tooltip:{callbacks:{label:(i)=>fmt(i.raw)+' GW'}} },
+      scales:{ x:{ticks:{color:muted,font:{size:11}},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{beginAtZero:true, suggestedMax:Math.max(r.model_us_pluc*1.1, r.needed_shortfall*1.2),
+           ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted}} }
+    })
+  }));
+  charts.push(new Chart(document.getElementById('cover2'), {
+    type:'bar',
+    data:{ labels:[['2026-28','additions'],['Full pipeline','(all years)']],
+      datasets:[{label:'GW', data:[r.model_us_additions_26_28, r.model_us_pluc],
+        backgroundColor:[cssv('--series-5'), cssv('--series-1')], borderRadius:4, borderSkipped:false}] },
+    options: Object.assign(baseOpts(text,muted,grid), {
+      plugins:{ legend:{display:false}, refLine:{value:r.needed_shortfall, color:cssv('--critical'), label:'Needed'},
+        tooltip:{callbacks:{label:(i)=>fmt(i.raw)+' GW'}} },
+      scales:{ x:{ticks:{color:muted,font:{size:11}},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{beginAtZero:true, ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted}} }
+    })
+  }));
+  document.getElementById('cover-take').innerHTML =
+    'The model shows <b>'+fmt(r.model_us_pluc,0)+' GW</b> of US Planned+UC &mdash; roughly <b>'+fmt(r.coverage_ratio_pluc,1)+'&times;</b> the 37.71 GW the client says is missing. Even UC alone ('+fmt(r.model_us_uc)+' GW) is below the shortfall, but the announced <i>planned</i> pipeline dwarfs it &mdash; the discrepancy is whether that pipeline actually gets built and powered.';
+}
+
+// shaded 2026-28 band for YoY
+const bandPlugin = {
+  id:'band',
+  beforeDatasetsDraw(chart, args, opts){
+    if(!opts||opts.fromIndex==null) return;
+    const {ctx, chartArea:{top,bottom}, scales:{x}} = chart;
+    const half = (x.getPixelForValue(1) - x.getPixelForValue(0)) / 2;
+    const x1 = x.getPixelForValue(opts.fromIndex) - half;
+    const x2 = x.getPixelForValue(opts.toIndex) + half;
+    ctx.save(); ctx.fillStyle = opts.color;
+    ctx.fillRect(x1, top, x2-x1, bottom-top); ctx.restore();
+  }
+};
+Chart.register(bandPlugin);
+
+function buildYoy(text, muted, grid) {
+  const y = DATA.supply.year_series_gw, yrs = DATA.supply.years;
+  charts.push(new Chart(document.getElementById('yoy'), {
+    type:'bar',
+    data:{ labels:yrs, datasets:[
+      {type:'bar', label:'Hyperscaler', data:y.hyperscaler, backgroundColor:cssv('--series-5'), stack:'cap', borderWidth:0},
+      {type:'bar', label:'Colocation', data:y.colocation, backgroundColor:cssv('--series-2'), stack:'cap', borderWidth:0},
+      {type:'line', label:'Total', data:y.total, borderColor:cssv('--series-1'), backgroundColor:cssv('--series-1'),
+       borderWidth:2, pointRadius:0, tension:0.25}
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid), {
+      interaction:{mode:'index', intersect:false},
+      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
+        band:{fromIndex:yrs.indexOf(2026), toIndex:yrs.indexOf(2028), color:alpha(cssv('--muted'),0.12)},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} },
+      scales:{ x:{stacked:true, ticks:{color:muted,font:{size:10.5}},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{stacked:true, ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted}} }
+    })
+  }));
+  const c25=y.total[yrs.indexOf(2025)], c28=y.total[yrs.indexOf(2028)];
+  document.getElementById('yoy-take').innerHTML =
+    'US installed capacity climbs from <b>'+fmt(c25)+' GW</b> (2025) to <b>'+fmt(c28)+' GW</b> (2028) in the model &mdash; a '+fmt(c28-c25)+' GW build, well above the client\'s 67.6 GW demand figure for the same window.';
+}
+
+function buildGaps(text, muted, grid) {
+  const r = DATA.reconciliation;
+  const mkOpts = (maxv) => Object.assign(baseOpts(text,muted,grid), {
+    plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmt(i.raw)+' GW'}} },
+    scales:{ x:{ticks:{color:muted,font:{size:11}},grid:{display:false},border:{color:cssv('--baseline')}},
+      y:{beginAtZero:true, suggestedMax:maxv, ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted}} }
+  });
+  charts.push(new Chart(document.getElementById('gap1'), {
+    type:'bar',
+    data:{ labels:['Model US','Client'],
+      datasets:[{data:[r.model_us_uc, r.client_uc], backgroundColor:[cssv('--series-1'), cssv('--series-3')], borderRadius:4, borderSkipped:false}] },
+    options: mkOpts(r.model_us_uc*1.2)
+  }));
+  charts.push(new Chart(document.getElementById('gap2'), {
+    type:'bar',
+    data:{ labels:['Model US','Client'],
+      datasets:[{data:[r.model_us_additions_26_28, r.client_demand], backgroundColor:[cssv('--series-1'), cssv('--series-3')], borderRadius:4, borderSkipped:false}] },
+    options: mkOpts(r.model_us_additions_26_28*1.2)
+  }));
+  document.getElementById('gap-take').innerHTML =
+    '<b>Under construction:</b> model '+fmt(r.model_us_uc)+' GW vs client '+fmt(r.client_uc)+' GW (left). '+
+    '<b>New capacity 2026-28:</b> model '+fmt(r.model_us_additions_26_28)+' GW vs client demand '+fmt(r.client_demand)+' GW (right). '+
+    'The model is consistently more bullish on what is already committed.';
+}
+
+function buildBars(id, items, colorVar, text, muted, grid) {
+  charts.push(new Chart(document.getElementById(id), {
+    type:'bar',
+    data:{ labels: items.map(i=>i.name), datasets:[{label:'GW', data: items.map(i=>i.gw),
+      backgroundColor:cssv(colorVar), borderRadius:4, borderSkipped:false}] },
+    options: Object.assign(baseOpts(text,muted,grid), {
+      indexAxis:'y',
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmt(i.raw)+' GW'}} },
+      scales:{ x:{beginAtZero:true, ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted}},
+        y:{ticks:{color:muted,font:{size:11}},grid:{display:false},border:{color:cssv('--baseline')}} }
+    })
+  }));
+}
+
+function buildAll() {
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+  buildWaterfall(text,muted,grid);
+  buildCover(text,muted,grid);
+  buildYoy(text,muted,grid);
+  buildGaps(text,muted,grid);
+  buildBars('states', DATA.supply.top_states, '--series-1', text,muted,grid);
+  buildBars('companies', DATA.supply.top_companies, '--series-2', text,muted,grid);
+}
+
+function rebuild() {
+  while (charts.length) { charts.pop().destroy(); }
+  buildAll();
+}
+
+// static text
+document.getElementById('src-line').textContent =
+  'Sources: ' + DATA.meta.model_file + ' (NA Data Center Supply) and ' + DATA.meta.client_file + ' (US Shortfall Analysis).';
+document.getElementById('cv-model').textContent = DATA.meta.model_asof;
+document.getElementById('cv-client').textContent = DATA.meta.client_asof;
+
+buildKpis();
+buildAll();
+
+// waterfall scenario toggle
+document.querySelectorAll('#wf-controls button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#wf-controls button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); wfScenario = b.dataset.scen;
+    // rebuild only the waterfall
+    const idx = charts.findIndex(c => c.canvas && c.canvas.id==='waterfall');
+    if (idx>=0) { charts[idx].destroy(); charts.splice(idx,1); }
+    const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+    buildWaterfall(text,muted,grid);
+  });
+});
+
+// re-theme on dark/light switch
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rebuild);
+}
+</script>
+</body>
+</html>
