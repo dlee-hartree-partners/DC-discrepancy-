@@ -1,10 +1,10 @@
 # DC Discrepancy Dashboards
 
-Four cross-linked dashboard pages built from three data-center workbooks:
+Five cross-linked dashboard pages built from three data-center workbooks:
 
 | Source | File | Key tabs |
 |--------|------|----------|
-| Client / demand | `Client_Intelligence Factory Anaysis_June11_2026 (1) - v2.xlsx` | `US Shortfall Analysis`, `Power Summary`, `Compute Demand` |
+| Client / demand | `Client_Intelligence Factory Anaysis_June11_2026 (1) - v2.xlsx` | `US Shortfall Analysis`, `Power Summary`, `Compute Demand`, `AI Power_US` |
 | Supply model | `AI-Data-Center-Model-CLIENT-April-7-noSKU.xlsx` | `NA Data Center Supply`, `Hyperscalers & Neoclouds`, `Power Requirements per Chip`, `AI CPU Demand calculations` |
 | MS Nvidia server model | `Request_NV AI Server Model_052126 2.xlsx` | `ODM share analysis`, `GB200-300 Tracker`, `GPU Roadmap`, `Nvidia Rack Layout` |
 
@@ -24,6 +24,15 @@ modeled slippage; constrained demand runs ~13% below unconstrained in 2028) and 
 outpaces buildout (yes — the model's own NA balance runs a cumulative deficit every year 2023–2030),
 plus a dedicated section on where the three spreadsheets disagree (~64 GW spread on the same question).
 
+**Page 5 (`geo_dashboard.html`):** the buildout made geographic and deployment-typed. An **offline US map**
+(facility Lat/Long plotted with vendored d3-geo + us-atlas, no online tiles) with circles sized by GW of capacity
+coming online 2026–28, color-toggled by construction status or by deployment type. Then two charts split by
+**Neocloud (pink) / Leasing (blue) / Self-built (lavender)**: **GW of Chips** (demand — magnitude from the client
+`AI Power_US` tab, mix from the supply model's `Hyperscalers & Neoclouds` tab; a *derived cross-source blend*) vs
+**Datacenter capacity** (supply — `NA Data Center Supply` facilities). Toggles: quarterly/annual and
+absolute / net-additions / YoY %. Deployment class per facility is a labeled heuristic (neocloud operator/tenant/
+GPU-cloud tag → neocloud; hyperscaler-type → self-built; colocation → leasing).
+
 ## Run
 
 ```bash
@@ -37,10 +46,12 @@ This reads the three workbooks and writes:
 - **`chips_dashboard.html`** — chips, power & buildout (page 2).
 - **`compute_dashboard.html`** — compute & energy over time (page 3).
 - **`synthesis_dashboard.html`** — delays, the race, and cross-file disagreements (page 4).
+- **`geo_dashboard.html`** — offline map + GW-of-chips vs datacenter-capacity by deployment type (page 5).
 - **`dashboard_data.json`** — all extracted + reconciled figures.
 
-Both pages are self-contained (Chart.js inlined) and work offline. A built-in self-check aborts
-if any anchor cell reference drifts from the expected values.
+All pages are self-contained (Chart.js inlined; page 5 also inlines d3-geo, topojson-client and a
+us-atlas states TopoJSON) and work offline. A built-in self-check aborts if any anchor cell reference
+drifts from the expected values.
 
 ## What page 1 shows
 
@@ -90,5 +101,7 @@ if any anchor cell reference drifts from the expected values.
 | `chips_template.html` | Page 2 template (chips & buildout charts) |
 | `compute_template.html` | Page 3 template (compute & energy charts) |
 | `synthesis_template.html` | Page 4 template (verdicts, delays, discrepancies) |
+| `geo_template.html` | Page 5 template (offline map + by-deployment-type charts) |
 | `vendor/chart.umd.js` | Vendored Chart.js v4 (inlined for offline use) |
-| `dashboard.html` / `chips_dashboard.html` / `compute_dashboard.html` / `synthesis_dashboard.html` / `dashboard_data.json` | Generated output |
+| `vendor/d3-array.min.js`, `vendor/d3-geo.min.js`, `vendor/topojson-client.min.js`, `vendor/us-states-10m.json` | Vendored map libs + US states TopoJSON (inlined into page 5) |
+| `dashboard.html` / `chips_dashboard.html` / `compute_dashboard.html` / `synthesis_dashboard.html` / `geo_dashboard.html` / `dashboard_data.json` | Generated output |

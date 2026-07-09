@@ -31,12 +31,20 @@ TEMPLATE_FILE = os.path.join(HERE, "dashboard_template.html")
 CHIPS_TEMPLATE_FILE = os.path.join(HERE, "chips_template.html")
 COMPUTE_TEMPLATE_FILE = os.path.join(HERE, "compute_template.html")
 SYNTHESIS_TEMPLATE_FILE = os.path.join(HERE, "synthesis_template.html")
+GEO_TEMPLATE_FILE = os.path.join(HERE, "geo_template.html")
+
+# Offline map assets (vendored, inlined into the geography page like Chart.js).
+VENDOR_D3_ARRAY = os.path.join(HERE, "vendor", "d3-array.min.js")
+VENDOR_D3_GEO = os.path.join(HERE, "vendor", "d3-geo.min.js")
+VENDOR_TOPOJSON = os.path.join(HERE, "vendor", "topojson-client.min.js")
+VENDOR_US_TOPO = os.path.join(HERE, "vendor", "us-states-10m.json")
 
 OUT_JSON = os.path.join(HERE, "dashboard_data.json")
 OUT_HTML = os.path.join(HERE, "dashboard.html")
 OUT_CHIPS_HTML = os.path.join(HERE, "chips_dashboard.html")
 OUT_COMPUTE_HTML = os.path.join(HERE, "compute_dashboard.html")
 OUT_SYNTHESIS_HTML = os.path.join(HERE, "synthesis_dashboard.html")
+OUT_GEO_HTML = os.path.join(HERE, "geo_dashboard.html")
 
 
 def col(letter):
@@ -98,6 +106,27 @@ YEARS = list(range(2017, 2033))            # 2017..2032
 YEAR_COLS = {yr: col(chr(ord("K") + i)) for i, yr in enumerate(YEARS)}  # K..Z
 
 
+def _quarter_cols():
+    """Quarterly capacity columns on 'NA Data Center Supply': AD..BR = 4Q22..4Q32.
+
+    The row-4 header label on each column is the authoritative quarter id (the
+    year-end column, e.g. '4Q26' at AT, equals that row's annual 2026 value).
+    """
+    labs, cols = [], []
+    yr, q = 2022, 4
+    first, last = col("AD"), col("BR")
+    for i in range(last - first + 1):
+        labs.append(f"{q}Q{str(yr)[2:]}")
+        cols.append(first + i)
+        q += 1
+        if q > 4:
+            q, yr = 1, yr + 1
+    return labs, cols
+
+
+QUARTER_LABELS, QUARTER_COLS = _quarter_cols()
+
+
 def _norm_type(t):
     if not isinstance(t, str):
         return "other"
@@ -136,6 +165,34 @@ def _tenant_class(end_user, tenant):
     if t or u:
         return "other_tagged"
     return None
+
+
+# Neocloud names as they appear in the Company column (CV) or GPU-Cloud column
+# (DA) — superset of NEOCLOUD_TENANTS, adding the operator spellings used in the
+# 'Hyperscalers & Neoclouds' tab.
+NEOCLOUD_COMPANIES = NEOCLOUD_TENANTS | {
+    "coreweave", "nebius", "nscale", "fluidstack", "iren", "iren cloud",
+    "lambda", "tensorwave", "crusoe", "crusoe cloud", "vultr", "togetherai",
+    "sharonai", "firmus", "cerebras", "voltage park",
+}
+
+
+def _deploy_class(company, tenant, gpu_cloud, dc_type):
+    """Heuristic self-built / leasing / neocloud class for a facility (DERIVED).
+
+    neocloud  -> operated by / leased to a neocloud (company, tenant, or GPU-cloud tag);
+    selfbuilt -> a hyperscaler-type facility (owner-operated);
+    leasing   -> everything else (colocation space leased by a tenant).
+    Cross-checked in aggregate against the 'Hyperscalers & Neoclouds' tab.
+    """
+    co = company.strip().lower() if isinstance(company, str) else ""
+    tn = tenant.strip().lower() if isinstance(tenant, str) else ""
+    gc = gpu_cloud.strip().lower() if isinstance(gpu_cloud, str) else ""
+    if co in NEOCLOUD_COMPANIES or tn in NEOCLOUD_TENANTS or gc in NEOCLOUD_COMPANIES:
+        return "neocloud"
+    if _norm_type(dc_type) == "hyperscaler":
+        return "selfbuilt"
+    return "leasing"
 
 
 def extract_supply(wb):
@@ -218,6 +275,153 @@ def extract_supply(wb):
         "top_companies": top(by_company),
     }
     return data
+
+
+# --------------------------------------------------------------------------- #
+# Extraction: geography + deployment (page 5 — map & by-type charts)
+# --------------------------------------------------------------------------- #
+def extract_geo(wb):
+    """Per-facility geography + deployment class for US leaf rows (page-5 map).
+
+    One record per US building whose capacity grows between YE2025 and YE2028
+    (i.e. "coming online 2026-2028"); circle size on the map is that GW delta.
+    """
+    import datetime
+    ws = wb["NA Data Center Supply"]
+    cA = col("A")
+    cLat, cLng, cState, cCity = col("CN"), col("CO"), col("CP"), col("CQ")
+    cCountry, cCompany, cType = col("CT"), col("CV"), col("CX")
+    cGpu, cTenant, cLive = col("DA"), col("DB"), col("CC")
+    cUC = col("BV")
+    c25, c28 = YEAR_COLS[2025], YEAR_COLS[2028]
+    maxcol = max(cLat, cLng, cState, cCity, cCountry, cCompany, cType,
+                 cGpu, cTenant, cLive, cUC, c25, c28)
+
+    facilities = []
+    by_class = {"selfbuilt": 0.0, "leasing": 0.0, "neocloud": 0.0}
+    for row in ws.iter_rows(min_row=6, values_only=True):
+        if len(row) <= maxcol:
+            continue
+        a = row[cA]
+        if not (isinstance(a, str) and len(a) >= 8 and "-" in a):
+            continue
+        country = row[cCountry]
+        if not (isinstance(country, str) and country.strip().upper() in ("USA", "US", "UNITED STATES")):
+            continue
+        lat, lng = row[cLat], row[cLng]
+        if not (isinstance(lat, (int, float)) and isinstance(lng, (int, float))):
+            continue
+        online = num(row[c28]) - num(row[c25])              # MW online 2026-28
+        if online <= 0.5:
+            continue
+        cls = _deploy_class(row[cCompany], row[cTenant], row[cGpu], row[cType])
+        live = row[cLive]
+        gw = round(online / 1000.0, 4)
+        by_class[cls] += gw
+        facilities.append({
+            "lat": round(float(lat), 4), "lng": round(float(lng), 4),
+            "st": row[cState].strip() if isinstance(row[cState], str) else "",
+            "city": row[cCity].strip() if isinstance(row[cCity], str) else "",
+            "co": row[cCompany].strip() if isinstance(row[cCompany], str) else "",
+            "cls": cls,
+            "uc": num(row[cUC]) > 0,                         # under construction vs planned
+            "gw": gw,
+            "yr": live.year if isinstance(live, datetime.datetime) else None,
+        })
+    facilities.sort(key=lambda f: -f["gw"])                 # small circles drawn on top
+    return {"facilities": facilities, "n": len(facilities),
+            "total_gw": round(sum(f["gw"] for f in facilities), 3),
+            "by_class_gw": {k: round(v, 3) for k, v in by_class.items()}}
+
+
+def extract_capacity_by_deploy(wb):
+    """US facility capacity (year-end GW) by deployment class, annual + quarterly."""
+    ws = wb["NA Data Center Supply"]
+    cA, cCountry, cType = col("A"), col("CT"), col("CX")
+    cCompany, cGpu, cTenant = col("CV"), col("DA"), col("DB")
+    ycols = [YEAR_COLS[y] for y in YEARS]
+    maxcol = max(cA, cCountry, cType, cCompany, cGpu, cTenant, max(ycols), max(QUARTER_COLS))
+    classes = ("selfbuilt", "leasing", "neocloud")
+    annual = {k: [0.0] * len(YEARS) for k in classes}
+    quarterly = {k: [0.0] * len(QUARTER_COLS) for k in classes}
+    for row in ws.iter_rows(min_row=6, values_only=True):
+        if len(row) <= maxcol:
+            continue
+        a = row[cA]
+        if not (isinstance(a, str) and len(a) >= 8 and "-" in a):
+            continue
+        country = row[cCountry]
+        if not (isinstance(country, str) and country.strip().upper() in ("USA", "US", "UNITED STATES")):
+            continue
+        cls = _deploy_class(row[cCompany], row[cTenant], row[cGpu], row[cType])
+        for i, yc in enumerate(ycols):
+            annual[cls][i] += num(row[yc])
+        for i, qc in enumerate(QUARTER_COLS):
+            quarterly[cls][i] += num(row[qc])
+    gw = lambda lst: [round(v / 1000.0, 3) for v in lst]
+    return {"years": YEARS, "quarters": QUARTER_LABELS,
+            "annual": {k: gw(v) for k, v in annual.items()},
+            "quarterly": {k: gw(v) for k, v in quarterly.items()}}
+
+
+def extract_ai_power_us(wb):
+    """Client 'AI Power_US': US chip-driven Data Center Power Capacity (GW), 2023-2028.
+
+    Row located by label (robust to drift). Year values sit in cols G/K/O/S/W/AA.
+    """
+    g = _grid(wb["AI Power_US"], 60, col("AB") + 1)
+    years = [2023, 2024, 2025, 2026, 2027, 2028]
+    ycols = [col(c) for c in ("G", "K", "O", "S", "W", "AA")]
+    cap = None
+    for r in range(5, 40):
+        lab = g.get((r, col("E")))
+        if isinstance(lab, str) and lab.strip().lower().startswith("data center power capacity"):
+            cap = [round(num(g.get((r, c))), 3) for c in ycols]
+            break
+    if cap is None:
+        raise SystemExit("Could not locate 'Data Center Power Capacity (GW)' in AI Power_US")
+    return {"years": years, "dc_power_gw": cap}
+
+
+def derive_chips_by_deploy(ai_power_us, buildout):
+    """Split the client US GW-of-chips total by the model's deployment mix.
+
+    Magnitude: client 'AI Power_US' Data Center Power Capacity (GW).
+    Mix %: 'Hyperscalers & Neoclouds' deployment types (self-build / leasing /
+    neocloud share per year). This is a DERIVED cross-source blend.
+    """
+    hn_years = buildout["years"]                            # 2017..2032
+    n = len(hn_years)
+    sb = [0.0] * n; ls = [0.0] * n; ne = [0.0] * n
+    for h in buildout["hyperscalers"]:
+        for k, s in h["sub"].items():
+            kl = k.lower()
+            if "self-build" in kl:
+                sb = [a + b for a, b in zip(sb, s)]
+            elif "leasing" in kl:
+                ls = [a + b for a, b in zip(ls, s)]
+            elif "contracted neocloud" in kl:
+                ne = [a + b for a, b in zip(ne, s)]
+    for nc in buildout["neoclouds"]:                        # whole neocloud company = neocloud
+        for k, s in nc["sub"].items():
+            if "self-build" in k.lower() or "leasing" in k.lower():
+                ne = [a + b for a, b in zip(ne, s)]
+
+    years = ai_power_us["years"]
+    tot = ai_power_us["dc_power_gw"]
+    out = {"years": years, "selfbuilt": [], "leasing": [], "neocloud": [],
+           "mix_pct": {"selfbuilt": [], "leasing": [], "neocloud": []}}
+    for i, y in enumerate(years):
+        j = hn_years.index(y)
+        denom = sb[j] + ls[j] + ne[j]
+        fs, fl, fn = (sb[j] / denom, ls[j] / denom, ne[j] / denom) if denom > 0 else (0.0, 0.0, 0.0)
+        out["selfbuilt"].append(round(tot[i] * fs, 3))
+        out["leasing"].append(round(tot[i] * fl, 3))
+        out["neocloud"].append(round(tot[i] * fn, 3))
+        out["mix_pct"]["selfbuilt"].append(round(fs, 4))
+        out["mix_pct"]["leasing"].append(round(fl, 4))
+        out["mix_pct"]["neocloud"].append(round(fn, 4))
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -880,12 +1084,23 @@ def render_html(data, template_file):
         template = f.read()
     payload = json.dumps(data)
     html = template.replace("/*__CHARTJS__*/", chartjs).replace("__DATA__", payload)
+    # Map assets — only the geography template carries these placeholders.
+    if "/*__D3__*/" in html or "__USTOPO__" in html:
+        def _read(p):
+            with open(p, "r", encoding="utf-8") as fh:
+                return fh.read()
+        d3 = _read(VENDOR_D3_ARRAY) + "\n" + _read(VENDOR_D3_GEO)   # d3-array before d3-geo
+        html = (html.replace("/*__D3__*/", d3)
+                    .replace("/*__TOPOJSON__*/", _read(VENDOR_TOPOJSON))
+                    .replace("__USTOPO__", _read(VENDOR_US_TOPO)))
     return html
 
 
 def main():
     for p in (CLIENT_FILE, MODEL_FILE, NV_FILE, VENDOR_CHARTJS, TEMPLATE_FILE,
-              CHIPS_TEMPLATE_FILE, COMPUTE_TEMPLATE_FILE, SYNTHESIS_TEMPLATE_FILE):
+              CHIPS_TEMPLATE_FILE, COMPUTE_TEMPLATE_FILE, SYNTHESIS_TEMPLATE_FILE,
+              GEO_TEMPLATE_FILE, VENDOR_D3_ARRAY, VENDOR_D3_GEO, VENDOR_TOPOJSON,
+              VENDOR_US_TOPO):
         if not os.path.exists(p):
             raise SystemExit(f"Missing required file: {p}")
 
@@ -893,6 +1108,7 @@ def main():
     client_wb = openpyxl.load_workbook(CLIENT_FILE, read_only=True, data_only=True)
     shortfall = extract_shortfall(client_wb)
     client_chips = extract_client_chips(client_wb)
+    ai_power_us = extract_ai_power_us(client_wb)
     client_wb.close()
 
     print("Extracting model file (supply + buildout + chip watts) ...")
@@ -900,6 +1116,8 @@ def main():
     supply = extract_supply(model_wb)
     buildout = extract_buildout(model_wb)
     model_watts = extract_chip_watts(model_wb)
+    geo = extract_geo(model_wb)
+    cap_by_deploy = extract_capacity_by_deploy(model_wb)
     print("Extracting model file (demand, balance, revisions, slippage, additions) ...")
     customer = extract_customer_demand(model_wb)
     unconstrained = extract_unconstrained(model_wb)
@@ -925,6 +1143,11 @@ def main():
         ("vintage current 2026 = 100913", revisions["vintages"][-1]["y2026"], 100913, 2),
         ("vintage first 2030 = 140851", revisions["vintages"][0]["y2030"], 140851, 2),
         ("Oracle pct 2030 = -0.435", revisions["oracle_pct"][-1], -0.435, 0.005),
+        ("AI Power_US DC cap 2028 = 69.26 GW", ai_power_us["dc_power_gw"][-1], 69.264, 0.5),
+        ("cap-by-deploy 2028 == supply year-end total",
+         sum(cap_by_deploy["annual"][k][cap_by_deploy["years"].index(2028)]
+             for k in ("selfbuilt", "leasing", "neocloud")),
+         supply["year_series_gw"]["total"][supply["years"].index(2028)], 0.5),
     ]
     self_check(shortfall, supply, nv, buildout, client_chips, extra)
 
@@ -932,6 +1155,7 @@ def main():
     bridge = derive_bridge(nv, client_chips, supply)
     energy_split = derive_energy_split(client_chips)
     compute_split = derive_compute_split(client_chips)
+    chips_by_deploy = derive_chips_by_deploy(ai_power_us, buildout)
     data = {"shortfall": shortfall, "supply": supply, "reconciliation": rec,
             "chips": {"nv": nv, "client": client_chips, "model_watts": model_watts,
                       "watts_compare": build_watts_compare(model_watts, nv["ms_tdp"]),
@@ -941,6 +1165,8 @@ def main():
             "synthesis": {"unconstrained": unconstrained, "balance": balance,
                           "revisions": revisions, "slippage": slippage,
                           "dash_adds": dash_adds},
+            "geo": {"facilities": geo, "capacity_by_deploy": cap_by_deploy,
+                    "chips_by_deploy": chips_by_deploy, "ai_power_us": ai_power_us},
             "meta": {
                 "client_file": os.path.basename(CLIENT_FILE),
                 "model_file": os.path.basename(MODEL_FILE),
@@ -963,6 +1189,9 @@ def main():
 
     with open(OUT_SYNTHESIS_HTML, "w", encoding="utf-8") as f:
         f.write(render_html(data, SYNTHESIS_TEMPLATE_FILE))
+
+    with open(OUT_GEO_HTML, "w", encoding="utf-8") as f:
+        f.write(render_html(data, GEO_TEMPLATE_FILE))
 
     print("\n=== Reconciliation summary (GW) ===")
     print(f"  Needed (Power Shortfall before solutions): {rec['needed_shortfall']}")
@@ -991,7 +1220,15 @@ def main():
     print(f"  Vintages captured:                         {len(revisions['vintages'])} "
           f"({revisions['vintages'][0]['label']} -> {revisions['vintages'][-1]['label']})")
     print(f"  Slippage: median {slippage['median_mo']} mo, {slippage['pct_ge_7mo']}% >=7mo, n={slippage['n']}")
-    print(f"\nWrote:\n  {OUT_JSON}\n  {OUT_HTML}\n  {OUT_CHIPS_HTML}\n  {OUT_COMPUTE_HTML}\n  {OUT_SYNTHESIS_HTML}")
+    print("\n=== Geography & deployment summary ===")
+    _i28 = cap_by_deploy["years"].index(2028)
+    _cap28 = {k: cap_by_deploy["annual"][k][_i28] for k in ("selfbuilt", "leasing", "neocloud")}
+    print(f"  US facilities coming online 2026-28:       {geo['n']} ({geo['total_gw']} GW)")
+    print(f"  Map GW by class (self/lease/neo):          {geo['by_class_gw']}")
+    print(f"  Capacity-by-deploy year-end 2028 (GW):     {_cap28}")
+    print(f"  Chips-by-deploy 2028 (GW):                 self "
+          f"{chips_by_deploy['selfbuilt'][-1]}, lease {chips_by_deploy['leasing'][-1]}, neo {chips_by_deploy['neocloud'][-1]}")
+    print(f"\nWrote:\n  {OUT_JSON}\n  {OUT_HTML}\n  {OUT_CHIPS_HTML}\n  {OUT_COMPUTE_HTML}\n  {OUT_SYNTHESIS_HTML}\n  {OUT_GEO_HTML}")
 
 
 if __name__ == "__main__":

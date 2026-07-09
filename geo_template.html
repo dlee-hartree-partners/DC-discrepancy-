@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Data Centers &mdash; Geography &amp; Deployment</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --land: #ecebe4;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --series-2: #1baf7a;
+    --series-3: #eda100;
+    --series-5: #eb6834;
+    /* deployment palette (requested): neocloud=pink, leasing=blue, self-built=lavender */
+    --neocloud: #e0699b;
+    --leasing:  #2a78d6;
+    --selfbuilt:#9085e9;
+    /* map status palette */
+    --uc: #eb6834;
+    --planned: #8d8b84;
+    --critical: #d03b3b;
+    --warning: #fab219;
+    --shadow: 0 1px 2px rgba(11,11,11,0.05), 0 1px 3px rgba(11,11,11,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface-1: #1a1a19;
+      --land: #232322;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-2: #199e70;
+      --series-3: #c98500;
+      --series-5: #d95926;
+      --neocloud: #e87ba4;
+      --leasing:  #3987e5;
+      --selfbuilt:#9d93f0;
+      --uc: #e08050;
+      --planned: #7d7b74;
+      --critical: #e66767;
+      --warning: #fab219;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.45; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  nav.pagenav { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  nav.pagenav a {
+    font-size: 13px; padding: 6px 14px; border-radius: 999px; text-decoration: none;
+    border: 1px solid var(--border); color: var(--text-secondary); background: var(--surface-1);
+  }
+  nav.pagenav a.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header .sub { color: var(--text-secondary); font-size: 15px; margin: 0 0 4px; }
+  header .src { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+  .banner {
+    margin: 22px 0 26px; padding: 14px 16px; border-radius: 10px;
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface-1));
+    border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);
+  }
+  .banner b { color: var(--text-primary); }
+  .section-label {
+    font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+    margin: 30px 0 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ""; flex: 1; height: 1px; background: var(--gridline); }
+  .badge {
+    display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em;
+    padding: 2px 8px; border-radius: 999px; vertical-align: 2px; margin-left: 8px;
+    background: color-mix(in srgb, var(--series-1) 15%, var(--surface-1)); color: var(--series-1);
+    border: 1px solid color-mix(in srgb, var(--series-1) 35%, transparent);
+  }
+  .badge.derived { background: color-mix(in srgb, var(--warning) 18%, var(--surface-1)); color: #a9741b;
+    border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 20px; box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .card h2 { font-size: 16.5px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .card .cap { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+  .card .cap .cell { color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .chart-box { position: relative; height: 340px; }
+  .chart-box.tall { height: 380px; }
+  .subhead { text-align: center; font-size: 12.5px; color: var(--muted); margin: 0 0 6px; }
+  .takeaway { font-size: 13px; color: var(--text-secondary); margin-top: 12px; padding-left: 12px;
+    border-left: 3px solid var(--series-1); }
+  .takeaway b { color: var(--text-primary); }
+  .controls { display: flex; gap: 6px; margin: 2px 0 12px; flex-wrap: wrap; align-items: center; }
+  .controls .lbl { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+  .controls button {
+    font: inherit; font-size: 12.5px; padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer;
+  }
+  .controls button.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  .controls .sep { width: 1px; align-self: stretch; background: var(--gridline); margin: 2px 6px; }
+  /* map */
+  .mapwrap { position: relative; }
+  svg#map { width: 100%; height: auto; display: block; }
+  svg#map .state { fill: var(--land); stroke: var(--baseline); stroke-width: 0.6; stroke-linejoin: round; }
+  svg#map circle { stroke: var(--surface-1); stroke-width: 0.4; }
+  .maptip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .08s;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 8px 10px; font-size: 12px; color: var(--text-primary);
+    max-width: 230px; z-index: 5;
+  }
+  .maptip .t-co { font-weight: 600; }
+  .maptip .t-sub { color: var(--text-secondary); }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0 2px; font-size: 12.5px; color: var(--text-secondary); }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .sizekey { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .sizekey svg { overflow: visible; }
+  footer { margin-top: 34px; color: var(--muted); font-size: 12px; text-align: center; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
+<div class="wrap">
+  <nav class="pagenav">
+    <a href="dashboard.html">Supply vs Shortfall</a>
+    <a href="chips_dashboard.html">Chips &amp; Buildout</a>
+    <a href="compute_dashboard.html">Compute &amp; Energy</a>
+    <a href="synthesis_dashboard.html">Synthesis</a>
+    <a href="geo_dashboard.html" class="active">Geography &amp; Deployment</a>
+  </nav>
+  <header>
+    <h1>US Data Centers &mdash; Geography &amp; Deployment</h1>
+    <p class="sub">Where new capacity lands (2026&ndash;28), and the gap between the GW of chip power the client model needs and the datacenter capacity the supply model builds &mdash; both split by neocloud / leasing / self-built.</p>
+    <p class="src" id="src-line"></p>
+  </header>
+
+  <div class="banner">
+    <b>Read me.</b> The <b>map</b> and the <b>datacenter-capacity</b> chart are the <b>supply model</b>
+    (<span class="cell" id="src-model"></span>, <i>NA Data Center Supply</i>). The <b>GW-of-chips</b> chart takes its
+    magnitude from the <b>client model</b> (<span class="cell" id="src-client"></span>, <i>AI Power_US</i> &mdash; "Data Center Power Capacity, GW")
+    and its neocloud/leasing/self-built <i>mix</i> from the supply model's <i>Hyperscalers &amp; Neoclouds</i> tab &mdash; a
+    <b>derived cross-source blend</b>. Deployment class per facility is a <b>heuristic</b>: neocloud = neocloud operator/tenant/GPU-cloud tag;
+    self-built = hyperscaler-type; leasing = colocation. Circle size = GW of capacity coming online 2026&ndash;2028 (year-end 2028 less 2025).
+  </div>
+
+  <div class="section-label">Map &middot; new US capacity 2026&ndash;2028 <span class="badge">SUPPLY MODEL</span></div>
+
+  <div class="card">
+    <h2>1. Data Centers Coming Online, 2026&ndash;2028</h2>
+    <p class="cap">Each circle is a US facility; area &prop; GW of capacity going live 2026&ndash;28. Toggle the color coding. <span class="cell">(NA Data Center Supply: Lat/Long CN/CO, cols K&ndash;Z, BV; deployment class derived)</span></p>
+    <div class="controls" id="map-controls">
+      <span class="lbl">Color by</span>
+      <button data-mode="deploy" class="active">Deployment type</button>
+      <button data-mode="status">Construction status</button>
+    </div>
+    <div class="legend" id="map-legend"></div>
+    <div class="mapwrap">
+      <svg id="map" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="US data center map"></svg>
+      <div class="maptip" id="maptip"></div>
+    </div>
+    <div class="sizekey" id="sizekey"></div>
+    <p class="takeaway" id="map-take"></p>
+  </div>
+
+  <div class="section-label">Demand vs supply, by deployment type</div>
+
+  <div class="card">
+    <h2>2. GW of Chips vs Datacenter Capacity &mdash; by Deployment Type</h2>
+    <p class="cap">
+      <b>Left &mdash; GW of Chips</b> (chip-driven power the buildout needs) <span class="cell">Client &middot; AI Power_US &times; mix from Hyperscalers &amp; Neoclouds</span> <span class="badge derived">DERIVED</span>.
+      <b>Right &mdash; Datacenter capacity</b> (year-end facility capacity built) <span class="cell">Model &middot; NA Data Center Supply</span>.
+      Neocloud (pink), Leasing (blue), Self-built (lavender).
+    </p>
+    <div class="controls" id="chart-controls">
+      <span class="lbl">Period</span>
+      <button data-gran="annual" class="active">Annual</button>
+      <button data-gran="quarterly">Quarterly</button>
+      <span class="sep"></span>
+      <span class="lbl">Measure</span>
+      <button data-xf="abs" class="active">Absolute</button>
+      <button data-xf="net">Net additions</button>
+      <button data-xf="pct">YoY % change</button>
+    </div>
+    <div class="grid2">
+      <div><p class="subhead" id="chips-sub">GW of Chips (demand) &mdash; annual</p><div class="chart-box tall"><canvas id="chipsChart"></canvas></div></div>
+      <div><p class="subhead" id="cap-sub">Datacenter capacity (supply) &mdash; annual</p><div class="chart-box tall"><canvas id="capChart"></canvas></div></div>
+    </div>
+    <p class="takeaway" id="chart-take"></p>
+  </div>
+
+  <footer>Generated by <code>build_dashboard.py</code> &middot; self-contained &middot; charts via vendored Chart.js &middot; map via vendored d3-geo + us-atlas</footer>
+</div>
+
+<script>/*__CHARTJS__*/</script>
+<script>/*__D3__*/</script>
+<script>/*__TOPOJSON__*/</script>
+<script>
+const DATA = __DATA__;
+const US_TOPO = __USTOPO__;
+const charts = [];
+
+function cssv(name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+function alpha(hex, a) {
+  const h = hex.replace('#',''); const n = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  return 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')';
+}
+function fmt(v, d) { return (v==null? '' : Number(v).toFixed(d==null?1:d)); }
+
+function baseOpts(text, muted, grid) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: text, boxWidth: 12, boxHeight: 12, usePointStyle: true, font: {size: 12} } },
+      tooltip: { callbacks: {} }
+    },
+    scales: {
+      x: { ticks: { color: muted, font: {size: 11} }, grid: { display: false }, border: { color: cssv('--baseline') } },
+      y: { ticks: { color: muted, font: {size: 11} }, grid: { color: grid }, border: { display: false },
+           title: { display: true, text: 'GW', color: muted, font: {size: 11} } }
+    }
+  };
+}
+
+// deployment class -> color / label
+const CLS = [
+  {key:'selfbuilt', label:'Self-built', varn:'--selfbuilt'},
+  {key:'leasing',   label:'Leasing',    varn:'--leasing'},
+  {key:'neocloud',  label:'Neocloud',   varn:'--neocloud'},
+];
+function clsColor(k){ return cssv(CLS.find(c=>c.key===k).varn); }
+
+// --------------------------------------------------------------------------- //
+// Map
+// --------------------------------------------------------------------------- //
+const facs = DATA.geo.facilities.facilities;
+let mapMode = 'deploy';
+
+function colorFor(f, mode){
+  if(mode==='status') return f.uc ? cssv('--uc') : cssv('--planned');
+  return clsColor(f.cls);
+}
+
+function buildMap(){
+  const svg = document.getElementById('map');
+  const W = 960, H = 600;
+  const states = topojson.feature(US_TOPO, US_TOPO.objects.states);
+  const nation = topojson.feature(US_TOPO, US_TOPO.objects.nation);
+  const proj = d3.geoAlbersUsa().fitSize([W, H], nation);
+  const path = d3.geoPath(proj);
+
+  let s = '';
+  states.features.forEach(f => { const d = path(f); if(d) s += '<path class="state" d="'+d+'"></path>'; });
+
+  const maxGw = facs.reduce((m,f)=>Math.max(m,f.gw),0) || 1;
+  const rOf = gw => 1.6 + 16*Math.sqrt(gw/maxGw);
+  const pts = [];
+  facs.forEach((f,i) => {
+    const p = proj([f.lng, f.lat]);
+    if(!p) return;
+    pts.push('<circle data-i="'+i+'" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+rOf(f.gw).toFixed(2)+
+             '" fill="'+colorFor(f, mapMode)+'" fill-opacity="0.62"></circle>');
+  });
+  svg.innerHTML = s + pts.join('');
+  recolorMap();
+  renderLegend();
+  renderSizeKey(maxGw, rOf);
+}
+
+function recolorMap(){
+  const svg = document.getElementById('map');
+  svg.querySelectorAll('circle').forEach(c => {
+    const f = facs[+c.getAttribute('data-i')];
+    c.setAttribute('fill', colorFor(f, mapMode));
+  });
+}
+
+function renderLegend(){
+  const el = document.getElementById('map-legend');
+  let items;
+  if(mapMode==='status'){
+    items = [{c:cssv('--uc'), t:'Under construction'}, {c:cssv('--planned'), t:'Planned'}];
+  } else {
+    items = CLS.map(c => ({c:cssv(c.varn), t:c.label}));
+  }
+  el.innerHTML = items.map(i => '<span class="item"><span class="dot" style="background:'+i.c+'"></span>'+i.t+'</span>').join('');
+}
+
+function renderSizeKey(maxGw, rOf){
+  const vals = [0.5, 2, Math.max(4, Math.round(maxGw))].filter((v,i,a)=>a.indexOf(v)===i && v<=maxGw+0.01);
+  let inner = '';
+  let x = 4;
+  vals.forEach(v => {
+    const r = rOf(v);
+    inner += '<circle cx="'+(x+r)+'" cy="'+(20-0)+'" r="'+r.toFixed(1)+'" fill="none" stroke="'+cssv('--muted')+'"></circle>';
+    inner += '<text x="'+(x+r)+'" y="38" text-anchor="middle" font-size="9" fill="'+cssv('--muted')+'">'+fmt(v)+'</text>';
+    x += 2*r + 26;
+  });
+  document.getElementById('sizekey').innerHTML =
+    '<span>Circle size (GW):</span><svg width="'+x+'" height="44">'+inner+'</svg>';
+}
+
+// tooltip via delegation
+(function(){
+  const svg = document.getElementById('map'), tip = document.getElementById('maptip');
+  const wrap = svg.parentElement;
+  svg.addEventListener('mouseover', e => {
+    if(e.target.tagName!=='circle') return;
+    const f = facs[+e.target.getAttribute('data-i')];
+    tip.innerHTML = '<div class="t-co">'+(f.co||'Unknown operator')+'</div>'+
+      '<div class="t-sub">'+[f.city, f.st].filter(Boolean).join(', ')+'</div>'+
+      '<div><b>'+fmt(f.gw,2)+' GW</b> online 2026&ndash;28'+(f.yr? ' &middot; live '+f.yr : '')+'</div>'+
+      '<div class="t-sub">'+CLS.find(c=>c.key===f.cls).label+' &middot; '+(f.uc?'under construction':'planned')+'</div>';
+    tip.style.opacity = 1;
+  });
+  svg.addEventListener('mousemove', e => {
+    if(tip.style.opacity=='0') return;
+    const b = wrap.getBoundingClientRect();
+    let x = e.clientX - b.left + 12, y = e.clientY - b.top + 12;
+    if(x > b.width-240) x = e.clientX - b.left - 232;
+    tip.style.left = x+'px'; tip.style.top = y+'px';
+  });
+  svg.addEventListener('mouseout', e => { if(e.target.tagName==='circle') tip.style.opacity = 0; });
+})();
+
+document.querySelectorAll('#map-controls button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#map-controls button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); mapMode = b.dataset.mode;
+    recolorMap(); renderLegend();
+  });
+});
+
+// --------------------------------------------------------------------------- //
+// Charts: GW of Chips (demand) and Datacenter capacity (supply)
+// --------------------------------------------------------------------------- //
+const T = { gran:'annual', xf:'abs' };
+
+function transform(vals, xf, lag){
+  if(xf==='abs') return vals.slice();
+  if(xf==='net') return vals.map((v,i)=> i<lag? null : Number((v-vals[i-lag]).toFixed(3)));
+  // pct (YoY): lag periods back
+  return vals.map((v,i)=> (i<lag || !vals[i-lag]) ? null : Number(((v-vals[i-lag])/vals[i-lag]*100).toFixed(1)));
+}
+
+function makeDatasets(series, xf, lag, startIdx){
+  const isPct = xf==='pct';
+  return CLS.map(c => {
+    const full = transform(series[c.key], xf, xf==='pct'? lag : 1);
+    const data = full.slice(startIdx);
+    const col = cssv(c.varn);
+    if(isPct){
+      return {type:'line', label:c.label, data, borderColor:col, backgroundColor:col,
+              borderWidth:2, pointRadius:0, tension:0.25, spanGaps:true};
+    }
+    return {type:'bar', label:c.label, data, backgroundColor:col, stack:'d', borderWidth:0};
+  });
+}
+
+function chartOpts(text, muted, grid, isPct, unit){
+  const o = baseOpts(text, muted, grid);
+  o.interaction = {mode:'index', intersect:false};
+  o.plugins.tooltip = {callbacks:{label:(i)=> i.dataset.label+': '+fmt(i.raw)+(isPct?' %':' GW')}};
+  o.scales.x.stacked = !isPct;
+  o.scales.y.stacked = !isPct;
+  o.scales.y.title.text = unit;
+  if(isPct) o.scales.y.grid.color = grid;
+  o.scales.x.ticks.maxRotation = T.gran==='quarterly' ? 60 : 0;
+  o.scales.x.ticks.minRotation = T.gran==='quarterly' ? 60 : 0;
+  o.scales.x.ticks.autoSkip = true;
+  o.scales.x.ticks.maxTicksLimit = T.gran==='quarterly' ? 16 : 12;
+  return o;
+}
+
+function buildCharts(){
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+  const isPct = T.xf==='pct';
+  const unit = isPct ? '% change' : 'GW';
+
+  // ---- GW of Chips (client magnitude x model mix). Annual-only source. ----
+  const chips = DATA.geo.chips_by_deploy;
+  const chipsLabels = chips.years.map(String);
+  const chipsStart = T.xf==='abs' ? 0 : 1;   // hide the null leading period for net/pct
+  const chipsDs = makeDatasets(chips, T.xf, 1, chipsStart);
+  document.getElementById('chips-sub').textContent =
+    'GW of Chips (demand) — annual' + (T.gran==='quarterly' ? ' · client source is annual' : '');
+  charts.push(new Chart(document.getElementById('chipsChart'), {
+    type: isPct ? 'line' : 'bar',
+    data:{ labels: chipsLabels.slice(chipsStart), datasets: chipsDs },
+    options: chartOpts(text, muted, grid, isPct, unit)
+  }));
+
+  // ---- Datacenter capacity (supply facilities). Annual or quarterly. ----
+  const cbd = DATA.geo.capacity_by_deploy;
+  let capLabels, capSeries, lag, startIdx;
+  if(T.gran==='quarterly'){
+    capLabels = cbd.quarters; capSeries = cbd.quarterly; lag = 4;
+    startIdx = Math.max(cbd.quarters.indexOf('4Q23'), 0);
+  } else {
+    capLabels = cbd.years.map(String); capSeries = cbd.annual; lag = 1;
+    startIdx = Math.max(cbd.years.indexOf(2023), 0);
+  }
+  const capDs = makeDatasets(capSeries, T.xf, lag, startIdx);
+  document.getElementById('cap-sub').textContent =
+    'Datacenter capacity (supply) — ' + (T.gran==='quarterly' ? 'quarterly' : 'annual');
+  charts.push(new Chart(document.getElementById('capChart'), {
+    type: isPct ? 'line' : 'bar',
+    data:{ labels: capLabels.slice(startIdx), datasets: capDs },
+    options: chartOpts(text, muted, grid, isPct, unit)
+  }));
+
+  // takeaway
+  const c28 = chips.selfbuilt.at(-1)+chips.leasing.at(-1)+chips.neocloud.at(-1);
+  const i28 = cbd.years.indexOf(2028);
+  const cap28 = cbd.annual.selfbuilt[i28]+cbd.annual.leasing[i28]+cbd.annual.neocloud[i28];
+  document.getElementById('chart-take').innerHTML =
+    'By <b>2028</b> the client model needs <b>'+fmt(c28)+' GW</b> of chip power (self-built '+fmt(chips.selfbuilt.at(-1))+
+    ' / leasing '+fmt(chips.leasing.at(-1))+' / neocloud '+fmt(chips.neocloud.at(-1))+' GW), while the supply model carries <b>'+
+    fmt(cap28)+' GW</b> of US year-end facility capacity — a different lens on the same buildout, split the same three ways. '+
+    'Toggle <i>Net additions</i> to see per-period builds or <i>YoY %</i> for growth rates.';
+}
+
+function rebuild(){ while(charts.length){ charts.pop().destroy(); } buildCharts(); }
+
+document.querySelectorAll('#chart-controls button').forEach(b => {
+  b.addEventListener('click', () => {
+    const grp = b.dataset.gran ? 'gran' : 'xf';
+    document.querySelectorAll('#chart-controls button[data-'+grp+']').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    T[grp] = b.dataset[grp];
+    rebuild();
+  });
+});
+
+// --------------------------------------------------------------------------- //
+// static text + init
+// --------------------------------------------------------------------------- //
+document.getElementById('src-line').textContent =
+  'Sources: ' + DATA.meta.model_file + ' (NA Data Center Supply, Hyperscalers & Neoclouds) and ' +
+  DATA.meta.client_file + ' (AI Power_US).';
+document.getElementById('src-model').textContent = DATA.meta.model_file;
+document.getElementById('src-client').textContent = DATA.meta.client_file;
+
+const g = DATA.geo.facilities;
+document.getElementById('map-take').innerHTML =
+  '<b>'+g.n+'</b> US facilities add capacity in 2026&ndash;28, totaling <b>'+fmt(g.total_gw)+' GW</b> — '+
+  'self-built '+fmt(g.by_class_gw.selfbuilt)+' / leasing '+fmt(g.by_class_gw.leasing)+' / neocloud '+fmt(g.by_class_gw.neocloud)+' GW. '+
+  'Deployment class is a derived heuristic (see note above).';
+
+buildMap();
+buildCharts();
+
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { buildMap(); rebuild(); });
+}
+</script>
+</body>
+</html>
