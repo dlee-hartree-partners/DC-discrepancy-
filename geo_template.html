@@ -26,6 +26,11 @@
     /* map status palette */
     --uc: #eb6834;
     --planned: #8d8b84;
+    /* pipeline proximity palette */
+    --near: #1baf7a;
+    --mid: #eda100;
+    --far: #d03b3b;
+    --pipe: #b06a2c;
     --critical: #d03b3b;
     --warning: #fab219;
     --shadow: 0 1px 2px rgba(11,11,11,0.05), 0 1px 3px rgba(11,11,11,0.04);
@@ -50,6 +55,10 @@
       --selfbuilt:#9d93f0;
       --uc: #e08050;
       --planned: #7d7b74;
+      --near: #199e70;
+      --mid: #c98500;
+      --far: #e66767;
+      --pipe: #c98a55;
       --critical: #e66767;
       --warning: #fab219;
       --shadow: none;
@@ -114,9 +123,18 @@
   .controls .sep { width: 1px; align-self: stretch; background: var(--gridline); margin: 2px 6px; }
   /* map */
   .mapwrap { position: relative; }
-  svg#map { width: 100%; height: auto; display: block; }
-  svg#map .state { fill: var(--land); stroke: var(--baseline); stroke-width: 0.6; stroke-linejoin: round; }
-  svg#map circle { stroke: var(--surface-1); stroke-width: 0.4; }
+  svg.usmap { width: 100%; height: auto; display: block; cursor: grab; touch-action: none; }
+  svg.usmap.grabbing { cursor: grabbing; }
+  svg.usmap .state { fill: var(--land); stroke: var(--baseline); stroke-width: 0.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  svg.usmap circle { stroke: var(--surface-1); stroke-width: 0.4; vector-effect: non-scaling-stroke; }
+  svg.usmap .pipe { fill: none; stroke: var(--pipe); stroke-width: 0.5; stroke-opacity: 0.55; vector-effect: non-scaling-stroke; }
+  .zoomctl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 4px; z-index: 4; }
+  .zoomctl button {
+    width: 30px; height: 30px; font-size: 16px; line-height: 1; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+    border-radius: 7px; box-shadow: var(--shadow);
+  }
+  .zoomctl button.reset { font-size: 11px; }
   .maptip {
     position: absolute; pointer-events: none; opacity: 0; transition: opacity .08s;
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
@@ -142,6 +160,7 @@
     <a href="compute_dashboard.html">Compute &amp; Energy</a>
     <a href="synthesis_dashboard.html">Synthesis</a>
     <a href="geo_dashboard.html" class="active">Geography &amp; Deployment</a>
+    <a href="flows_dashboard.html">Flows &amp; Patterns</a>
   </nav>
   <header>
     <h1>US Data Centers &mdash; Geography &amp; Deployment</h1>
@@ -170,17 +189,47 @@
     </div>
     <div class="legend" id="map-legend"></div>
     <div class="mapwrap">
-      <svg id="map" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="US data center map"></svg>
+      <svg id="map" class="usmap" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="US data center map"></svg>
+      <div class="zoomctl" data-for="map">
+        <button data-z="in" title="Zoom in">+</button>
+        <button data-z="out" title="Zoom out">&minus;</button>
+        <button data-z="reset" class="reset" title="Reset view">Reset</button>
+      </div>
       <div class="maptip" id="maptip"></div>
     </div>
     <div class="sizekey" id="sizekey"></div>
     <p class="takeaway" id="map-take"></p>
   </div>
 
+  <div class="section-label">Map &middot; proximity to natural-gas pipelines <span class="badge">SUPPLY + EIA</span></div>
+
+  <div class="card">
+    <h2>2. Under-Construction &amp; Planned Capacity vs Natural-Gas Pipelines</h2>
+    <p class="cap">The same 2026&ndash;28 facilities over the US interstate/intrastate gas-pipeline network; circles colored by distance to the nearest pipeline (a proxy for how readily a site could add on-site gas generation &mdash; the shortfall analysis's "Nat Gas Turbines" solution). <span class="cell">(Pipelines: EIA Natural Gas Pipelines 2020, simplified; distance computed at build time)</span></p>
+    <div class="controls" id="pipe-controls">
+      <span class="lbl">Show</span>
+      <button data-flt="all" class="active">UC + Planned</button>
+      <button data-flt="uc">Under construction</button>
+      <button data-flt="planned">Planned</button>
+    </div>
+    <div class="legend" id="pipe-legend"></div>
+    <div class="mapwrap">
+      <svg id="pipemap" class="usmap" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="US data center gas-pipeline proximity map"></svg>
+      <div class="zoomctl" data-for="pipemap">
+        <button data-z="in" title="Zoom in">+</button>
+        <button data-z="out" title="Zoom out">&minus;</button>
+        <button data-z="reset" class="reset" title="Reset view">Reset</button>
+      </div>
+      <div class="maptip" id="pipetip"></div>
+    </div>
+    <div class="sizekey" id="pipesizekey"></div>
+    <p class="takeaway" id="pipe-take"></p>
+  </div>
+
   <div class="section-label">Demand vs supply, by deployment type</div>
 
   <div class="card">
-    <h2>2. GW of Chips vs Datacenter Capacity &mdash; by Deployment Type</h2>
+    <h2>3. GW of Chips vs Datacenter Capacity &mdash; by Deployment Type</h2>
     <p class="cap">
       <b>Left &mdash; GW of Chips</b> (chip-driven power the buildout needs) <span class="cell">Client &middot; AI Power_US &times; mix from Hyperscalers &amp; Neoclouds</span> <span class="badge derived">DERIVED</span>.
       <b>Right &mdash; Datacenter capacity</b> (year-end facility capacity built) <span class="cell">Model &middot; NA Data Center Supply</span>.
@@ -244,10 +293,64 @@ const CLS = [
 ];
 function clsColor(k){ return cssv(CLS.find(c=>c.key===k).varn); }
 
+// shared AlbersUSA projection + US-states base layer (used by both maps)
+const PIPES = __PIPES__;
+const STATES = topojson.feature(US_TOPO, US_TOPO.objects.states);
+const NATION = topojson.feature(US_TOPO, US_TOPO.objects.nation);
+const PROJ = d3.geoAlbersUsa().fitSize([960, 600], NATION);
+const PATH = d3.geoPath(PROJ);
+function statePaths(){
+  let s = '';
+  STATES.features.forEach(f => { const d = PATH(f); if(d) s += '<path class="state" d="'+d+'"></path>'; });
+  return s;
+}
+
+// --------------------------------------------------------------------------- //
+// Pan / zoom (d3.zoom on a <g class="zoomroot">; circle radii counter-scaled so
+// markers keep a constant screen size, strokes crisp via non-scaling-stroke)
+// --------------------------------------------------------------------------- //
+const ZOOM = {};   // svgId -> {behavior, transform, circles:[]}
+function setupZoom(svgId){
+  const svg = document.getElementById(svgId);
+  const z = d3.zoom().scaleExtent([1, 12])
+    .extent([[0,0],[960,600]]).translateExtent([[0,0],[960,600]])
+    .on('start', () => svg.classList.add('grabbing'))
+    .on('end',   () => svg.classList.remove('grabbing'))
+    .on('zoom',  (ev) => applyTransform(svgId, ev.transform));
+  d3.select(svg).call(z).on('dblclick.zoom', null);
+  ZOOM[svgId] = { behavior: z, transform: d3.zoomIdentity, circles: [] };
+}
+function applyTransform(svgId, t){
+  const st = ZOOM[svgId]; if(!st) return;
+  st.transform = t;
+  const g = document.getElementById(svgId).querySelector('.zoomroot');
+  if(g) g.setAttribute('transform', t.toString());
+  const k = t.k;
+  st.circles.forEach(c => c.setAttribute('r', (+c.dataset.r / k).toFixed(3)));
+}
+function refreshZoom(svgId){   // after innerHTML rebuild: re-cache circles + re-apply transform
+  const st = ZOOM[svgId]; if(!st) return;
+  const svg = document.getElementById(svgId);
+  st.circles = Array.from(svg.querySelectorAll('circle'));
+  d3.select(svg).call(st.behavior.transform, st.transform);
+}
+document.querySelectorAll('.zoomctl').forEach(ctl => {
+  const id = ctl.dataset.for;
+  ctl.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    const st = ZOOM[id]; if(!st) return;
+    const sel = d3.select('#'+id).transition().duration(260);
+    if(b.dataset.z === 'in')       sel.call(st.behavior.scaleBy, 1.6);
+    else if(b.dataset.z === 'out') sel.call(st.behavior.scaleBy, 1/1.6);
+    else                           sel.call(st.behavior.transform, d3.zoomIdentity);
+  }));
+});
+
 // --------------------------------------------------------------------------- //
 // Map
 // --------------------------------------------------------------------------- //
 const facs = DATA.geo.facilities.facilities;
+const MAXGW = facs.reduce((m,f)=>Math.max(m,f.gw),0) || 1;
+const rOf = gw => 1.6 + 16*Math.sqrt(gw/MAXGW);
 let mapMode = 'deploy';
 
 function colorFor(f, mode){
@@ -257,28 +360,19 @@ function colorFor(f, mode){
 
 function buildMap(){
   const svg = document.getElementById('map');
-  const W = 960, H = 600;
-  const states = topojson.feature(US_TOPO, US_TOPO.objects.states);
-  const nation = topojson.feature(US_TOPO, US_TOPO.objects.nation);
-  const proj = d3.geoAlbersUsa().fitSize([W, H], nation);
-  const path = d3.geoPath(proj);
-
-  let s = '';
-  states.features.forEach(f => { const d = path(f); if(d) s += '<path class="state" d="'+d+'"></path>'; });
-
-  const maxGw = facs.reduce((m,f)=>Math.max(m,f.gw),0) || 1;
-  const rOf = gw => 1.6 + 16*Math.sqrt(gw/maxGw);
   const pts = [];
   facs.forEach((f,i) => {
-    const p = proj([f.lng, f.lat]);
+    const p = PROJ([f.lng, f.lat]);
     if(!p) return;
-    pts.push('<circle data-i="'+i+'" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+rOf(f.gw).toFixed(2)+
+    const r = rOf(f.gw).toFixed(2);
+    pts.push('<circle data-i="'+i+'" data-r="'+r+'" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+r+
              '" fill="'+colorFor(f, mapMode)+'" fill-opacity="0.62"></circle>');
   });
-  svg.innerHTML = s + pts.join('');
+  svg.innerHTML = '<g class="zoomroot">' + statePaths() + pts.join('') + '</g>';
   recolorMap();
   renderLegend();
-  renderSizeKey(maxGw, rOf);
+  renderSizeKey('sizekey');
+  refreshZoom('map');
 }
 
 function recolorMap(){
@@ -300,17 +394,17 @@ function renderLegend(){
   el.innerHTML = items.map(i => '<span class="item"><span class="dot" style="background:'+i.c+'"></span>'+i.t+'</span>').join('');
 }
 
-function renderSizeKey(maxGw, rOf){
-  const vals = [0.5, 2, Math.max(4, Math.round(maxGw))].filter((v,i,a)=>a.indexOf(v)===i && v<=maxGw+0.01);
+function renderSizeKey(elId){
+  const vals = [0.5, 2, Math.max(4, Math.round(MAXGW))].filter((v,i,a)=>a.indexOf(v)===i && v<=MAXGW+0.01);
   let inner = '';
   let x = 4;
   vals.forEach(v => {
     const r = rOf(v);
-    inner += '<circle cx="'+(x+r)+'" cy="'+(20-0)+'" r="'+r.toFixed(1)+'" fill="none" stroke="'+cssv('--muted')+'"></circle>';
+    inner += '<circle cx="'+(x+r)+'" cy="20" r="'+r.toFixed(1)+'" fill="none" stroke="'+cssv('--muted')+'"></circle>';
     inner += '<text x="'+(x+r)+'" y="38" text-anchor="middle" font-size="9" fill="'+cssv('--muted')+'">'+fmt(v)+'</text>';
     x += 2*r + 26;
   });
-  document.getElementById('sizekey').innerHTML =
+  document.getElementById(elId).innerHTML =
     '<span>Circle size (GW):</span><svg width="'+x+'" height="44">'+inner+'</svg>';
 }
 
@@ -342,6 +436,88 @@ document.querySelectorAll('#map-controls button').forEach(b => {
     document.querySelectorAll('#map-controls button').forEach(x=>x.classList.remove('active'));
     b.classList.add('active'); mapMode = b.dataset.mode;
     recolorMap(); renderLegend();
+  });
+});
+
+// --------------------------------------------------------------------------- //
+// Pipeline-proximity map
+// --------------------------------------------------------------------------- //
+let pipeFlt = 'all';
+function pipeColor(mi){ if(mi==null || mi>25) return cssv('--far'); if(mi<=5) return cssv('--near'); return cssv('--mid'); }
+function pipePass(f){ return pipeFlt==='all' || (pipeFlt==='uc'? f.uc : !f.uc); }
+
+function buildPipeMap(){
+  const svg = document.getElementById('pipemap');
+  const pipeD = PATH(PIPES) || '';
+  const pts = [];
+  facs.forEach((f,i) => {
+    if(!pipePass(f)) return;
+    const p = PROJ([f.lng, f.lat]);
+    if(!p) return;
+    const r = rOf(f.gw).toFixed(2);
+    pts.push('<circle data-i="'+i+'" data-r="'+r+'" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+r+
+             '" fill="'+pipeColor(f.pipe_mi)+'" fill-opacity="0.66"></circle>');
+  });
+  svg.innerHTML = '<g class="zoomroot">' + statePaths() + '<path class="pipe" d="'+pipeD+'"></path>' + pts.join('') + '</g>';
+  renderPipeLegend();
+  renderSizeKey('pipesizekey');
+  refreshZoom('pipemap');
+  updatePipeTake();
+}
+
+function renderPipeLegend(){
+  const items = [
+    {c:cssv('--near'), t:'&le; 5 mi from a pipeline'},
+    {c:cssv('--mid'),  t:'5&ndash;25 mi'},
+    {c:cssv('--far'),  t:'&gt; 25 mi'},
+    {c:cssv('--pipe'), t:'Gas pipeline', line:true},
+  ];
+  document.getElementById('pipe-legend').innerHTML = items.map(i =>
+    i.line ? '<span class="item"><span class="dot" style="width:16px;height:3px;border-radius:2px;background:'+i.c+'"></span>'+i.t+'</span>'
+           : '<span class="item"><span class="dot" style="background:'+i.c+'"></span>'+i.t+'</span>').join('');
+}
+
+function updatePipeTake(){
+  const b = DATA.geo.facilities.pipe_buckets_gw;
+  const tot = b.le5 + b.le25 + b.gt25;
+  const shown = facs.filter(pipePass);
+  const sg = shown.reduce((s,f)=>s+f.gw,0);
+  const within5 = shown.filter(f=>f.pipe_mi!=null && f.pipe_mi<=5).reduce((s,f)=>s+f.gw,0);
+  document.getElementById('pipe-take').innerHTML =
+    'Of all 2026&ndash;28 capacity, <b>'+fmt(b.le5)+' GW</b> ('+fmt(100*b.le5/tot,0)+'%) sits within <b>5 mi</b> of a gas pipeline, '+
+    fmt(b.le25)+' GW at 5&ndash;25 mi, and only '+fmt(b.gt25)+' GW beyond 25 mi &mdash; most of the buildout is well-positioned for the '+
+    '"Nat Gas Turbines" time-to-power option. <span class="cell">Showing '+fmt(sg)+' GW ('+fmt(100*within5/(sg||1),0)+'% within 5 mi).</span>';
+}
+
+// pipe tooltip
+(function(){
+  const svg = document.getElementById('pipemap'), tip = document.getElementById('pipetip');
+  const wrap = svg.parentElement;
+  svg.addEventListener('mouseover', e => {
+    if(e.target.tagName!=='circle') return;
+    const f = facs[+e.target.getAttribute('data-i')];
+    const d = f.pipe_mi==null ? '&gt;50' : fmt(f.pipe_mi,1);
+    tip.innerHTML = '<div class="t-co">'+(f.co||'Unknown operator')+'</div>'+
+      '<div class="t-sub">'+[f.city, f.st].filter(Boolean).join(', ')+'</div>'+
+      '<div><b>'+fmt(f.gw,2)+' GW</b> &middot; '+(f.uc?'under construction':'planned')+'</div>'+
+      '<div class="t-sub"><b>'+d+' mi</b> to nearest gas pipeline</div>';
+    tip.style.opacity = 1;
+  });
+  svg.addEventListener('mousemove', e => {
+    if(tip.style.opacity=='0') return;
+    const b = wrap.getBoundingClientRect();
+    let x = e.clientX - b.left + 12, y = e.clientY - b.top + 12;
+    if(x > b.width-240) x = e.clientX - b.left - 232;
+    tip.style.left = x+'px'; tip.style.top = y+'px';
+  });
+  svg.addEventListener('mouseout', e => { if(e.target.tagName==='circle') tip.style.opacity = 0; });
+})();
+
+document.querySelectorAll('#pipe-controls button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#pipe-controls button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); pipeFlt = b.dataset.flt;
+    buildPipeMap();
   });
 });
 
@@ -461,11 +637,14 @@ document.getElementById('map-take').innerHTML =
   'self-built '+fmt(g.by_class_gw.selfbuilt)+' / leasing '+fmt(g.by_class_gw.leasing)+' / neocloud '+fmt(g.by_class_gw.neocloud)+' GW. '+
   'Deployment class is a derived heuristic (see note above).';
 
+setupZoom('map');
+setupZoom('pipemap');
 buildMap();
+buildPipeMap();
 buildCharts();
 
 if (window.matchMedia) {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { buildMap(); rebuild(); });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { buildMap(); buildPipeMap(); rebuild(); });
 }
 </script>
 </body>

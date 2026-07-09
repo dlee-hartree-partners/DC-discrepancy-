@@ -32,12 +32,14 @@ CHIPS_TEMPLATE_FILE = os.path.join(HERE, "chips_template.html")
 COMPUTE_TEMPLATE_FILE = os.path.join(HERE, "compute_template.html")
 SYNTHESIS_TEMPLATE_FILE = os.path.join(HERE, "synthesis_template.html")
 GEO_TEMPLATE_FILE = os.path.join(HERE, "geo_template.html")
+FLOWS_TEMPLATE_FILE = os.path.join(HERE, "flows_template.html")
 
-# Offline map assets (vendored, inlined into the geography page like Chart.js).
-VENDOR_D3_ARRAY = os.path.join(HERE, "vendor", "d3-array.min.js")
-VENDOR_D3_GEO = os.path.join(HERE, "vendor", "d3-geo.min.js")
+# Offline D3 / map assets (vendored, inlined into the geo + flows pages like Chart.js).
+VENDOR_D3 = os.path.join(HERE, "vendor", "d3.min.js")            # full D3 v7 (geo, zoom, force, ...)
+VENDOR_SANKEY = os.path.join(HERE, "vendor", "d3-sankey.min.js")
 VENDOR_TOPOJSON = os.path.join(HERE, "vendor", "topojson-client.min.js")
 VENDOR_US_TOPO = os.path.join(HERE, "vendor", "us-states-10m.json")
+VENDOR_PIPELINES = os.path.join(HERE, "vendor", "us-gas-pipelines.json")
 
 OUT_JSON = os.path.join(HERE, "dashboard_data.json")
 OUT_HTML = os.path.join(HERE, "dashboard.html")
@@ -45,6 +47,7 @@ OUT_CHIPS_HTML = os.path.join(HERE, "chips_dashboard.html")
 OUT_COMPUTE_HTML = os.path.join(HERE, "compute_dashboard.html")
 OUT_SYNTHESIS_HTML = os.path.join(HERE, "synthesis_dashboard.html")
 OUT_GEO_HTML = os.path.join(HERE, "geo_dashboard.html")
+OUT_FLOWS_HTML = os.path.join(HERE, "flows_dashboard.html")
 
 
 def col(letter):
@@ -422,6 +425,76 @@ def derive_chips_by_deploy(ai_power_us, buildout):
         out["mix_pct"]["leasing"].append(round(fl, 4))
         out["mix_pct"]["neocloud"].append(round(fn, 4))
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Natural-gas pipeline proximity (vendored EIA pipeline geometry)
+# --------------------------------------------------------------------------- #
+_EARTH_MI = 3958.8
+_PIPE_CELL = 0.5            # grid cell size in degrees for the spatial index
+_PIPE_MAXCELL = 2          # search +/- this many cells (~1 deg / up to ~50-69 mi)
+
+
+def load_pipelines():
+    """Vendored EIA gas-pipeline geometry: returns list of [lng,lat] polylines."""
+    with open(VENDOR_PIPELINES, "r", encoding="utf-8") as f:
+        gj = json.load(f)
+    return gj["coordinates"]
+
+
+def _seg_dist_mi(plng, plat, a, b):
+    """Great-circle-ish distance (mi) from point to segment a-b via a local
+    equirectangular projection centered on the point (accurate at these scales)."""
+    import math
+    cosl = math.cos(math.radians(plat))
+    ax = math.radians(a[0] - plng) * cosl * _EARTH_MI
+    ay = math.radians(a[1] - plat) * _EARTH_MI
+    bx = math.radians(b[0] - plng) * cosl * _EARTH_MI
+    by = math.radians(b[1] - plat) * _EARTH_MI
+    dx, dy = bx - ax, by - ay
+    if dx == 0 and dy == 0:
+        return math.hypot(ax, ay)
+    t = max(0.0, min(1.0, -(ax * dx + ay * dy) / (dx * dx + dy * dy)))
+    return math.hypot(ax + t * dx, ay + t * dy)
+
+
+def annotate_pipe_proximity(geo, segs):
+    """Add `pipe_mi` (miles to nearest gas pipeline) to each facility; add a
+    by-bucket GW summary to `geo`. Uses a lat/long grid index over pipeline
+    vertices so each facility only tests nearby segments."""
+    import math
+    grid = {}
+    for i, seg in enumerate(segs):
+        for x, y in seg:
+            grid.setdefault((math.floor(x / _PIPE_CELL), math.floor(y / _PIPE_CELL)), set()).add(i)
+
+    def nearest_mi(plng, plat):
+        cx, cy = math.floor(plng / _PIPE_CELL), math.floor(plat / _PIPE_CELL)
+        cand = set()
+        for a in range(-_PIPE_MAXCELL, _PIPE_MAXCELL + 1):
+            for b in range(-_PIPE_MAXCELL, _PIPE_MAXCELL + 1):
+                cand |= grid.get((cx + a, cy + b), set())
+        best = 1e9
+        for i in cand:
+            s = segs[i]
+            for k in range(len(s) - 1):
+                d = _seg_dist_mi(plng, plat, s[k], s[k + 1])
+                if d < best:
+                    best = d
+        return round(best, 2) if best < 1e8 else None
+
+    buckets = {"le5": 0.0, "le25": 0.0, "gt25": 0.0}   # GW within <=5 / 5-25 / >25 mi
+    for f in geo["facilities"]:
+        d = nearest_mi(f["lng"], f["lat"])
+        f["pipe_mi"] = d
+        if d is None or d > 25:
+            buckets["gt25"] += f["gw"]
+        elif d <= 5:
+            buckets["le5"] += f["gw"]
+        else:
+            buckets["le25"] += f["gw"]
+    geo["pipe_buckets_gw"] = {k: round(v, 3) for k, v in buckets.items()}
+    return geo
 
 
 # --------------------------------------------------------------------------- #
@@ -1084,23 +1157,32 @@ def render_html(data, template_file):
         template = f.read()
     payload = json.dumps(data)
     html = template.replace("/*__CHARTJS__*/", chartjs).replace("__DATA__", payload)
-    # Map assets — only the geography template carries these placeholders.
-    if "/*__D3__*/" in html or "__USTOPO__" in html:
-        def _read(p):
-            with open(p, "r", encoding="utf-8") as fh:
-                return fh.read()
-        d3 = _read(VENDOR_D3_ARRAY) + "\n" + _read(VENDOR_D3_GEO)   # d3-array before d3-geo
-        html = (html.replace("/*__D3__*/", d3)
-                    .replace("/*__TOPOJSON__*/", _read(VENDOR_TOPOJSON))
-                    .replace("__USTOPO__", _read(VENDOR_US_TOPO)))
+
+    def _read(p):
+        with open(p, "r", encoding="utf-8") as fh:
+            return fh.read()
+
+    # D3 assets (geo + flows pages). Each placeholder is inlined only if present.
+    # d3.min.js must precede d3-sankey (sankey reads d3-array/d3-shape off the global).
+    if "/*__D3__*/" in html:
+        html = html.replace("/*__D3__*/", _read(VENDOR_D3))
+    if "/*__SANKEY__*/" in html:
+        html = html.replace("/*__SANKEY__*/", _read(VENDOR_SANKEY))
+    # Map data (geo page only).
+    if "/*__TOPOJSON__*/" in html:
+        html = html.replace("/*__TOPOJSON__*/", _read(VENDOR_TOPOJSON))
+    if "__USTOPO__" in html:
+        html = html.replace("__USTOPO__", _read(VENDOR_US_TOPO))
+    if "__PIPES__" in html:
+        html = html.replace("__PIPES__", _read(VENDOR_PIPELINES))
     return html
 
 
 def main():
     for p in (CLIENT_FILE, MODEL_FILE, NV_FILE, VENDOR_CHARTJS, TEMPLATE_FILE,
               CHIPS_TEMPLATE_FILE, COMPUTE_TEMPLATE_FILE, SYNTHESIS_TEMPLATE_FILE,
-              GEO_TEMPLATE_FILE, VENDOR_D3_ARRAY, VENDOR_D3_GEO, VENDOR_TOPOJSON,
-              VENDOR_US_TOPO):
+              GEO_TEMPLATE_FILE, FLOWS_TEMPLATE_FILE, VENDOR_D3, VENDOR_SANKEY,
+              VENDOR_TOPOJSON, VENDOR_US_TOPO, VENDOR_PIPELINES):
         if not os.path.exists(p):
             raise SystemExit(f"Missing required file: {p}")
 
@@ -1118,6 +1200,8 @@ def main():
     model_watts = extract_chip_watts(model_wb)
     geo = extract_geo(model_wb)
     cap_by_deploy = extract_capacity_by_deploy(model_wb)
+    print("Computing natural-gas pipeline proximity ...")
+    annotate_pipe_proximity(geo, load_pipelines())
     print("Extracting model file (demand, balance, revisions, slippage, additions) ...")
     customer = extract_customer_demand(model_wb)
     unconstrained = extract_unconstrained(model_wb)
@@ -1193,6 +1277,9 @@ def main():
     with open(OUT_GEO_HTML, "w", encoding="utf-8") as f:
         f.write(render_html(data, GEO_TEMPLATE_FILE))
 
+    with open(OUT_FLOWS_HTML, "w", encoding="utf-8") as f:
+        f.write(render_html(data, FLOWS_TEMPLATE_FILE))
+
     print("\n=== Reconciliation summary (GW) ===")
     print(f"  Needed (Power Shortfall before solutions): {rec['needed_shortfall']}")
     print(f"  Client Under-Construction assumption:      {rec['client_uc']}")
@@ -1225,10 +1312,11 @@ def main():
     _cap28 = {k: cap_by_deploy["annual"][k][_i28] for k in ("selfbuilt", "leasing", "neocloud")}
     print(f"  US facilities coming online 2026-28:       {geo['n']} ({geo['total_gw']} GW)")
     print(f"  Map GW by class (self/lease/neo):          {geo['by_class_gw']}")
+    print(f"  GW by gas-pipeline proximity (<=5/5-25/>25 mi): {geo['pipe_buckets_gw']}")
     print(f"  Capacity-by-deploy year-end 2028 (GW):     {_cap28}")
     print(f"  Chips-by-deploy 2028 (GW):                 self "
           f"{chips_by_deploy['selfbuilt'][-1]}, lease {chips_by_deploy['leasing'][-1]}, neo {chips_by_deploy['neocloud'][-1]}")
-    print(f"\nWrote:\n  {OUT_JSON}\n  {OUT_HTML}\n  {OUT_CHIPS_HTML}\n  {OUT_COMPUTE_HTML}\n  {OUT_SYNTHESIS_HTML}\n  {OUT_GEO_HTML}")
+    print(f"\nWrote:\n  {OUT_JSON}\n  {OUT_HTML}\n  {OUT_CHIPS_HTML}\n  {OUT_COMPUTE_HTML}\n  {OUT_SYNTHESIS_HTML}\n  {OUT_GEO_HTML}\n  {OUT_FLOWS_HTML}")
 
 
 if __name__ == "__main__":

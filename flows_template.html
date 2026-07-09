@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Data Centers &mdash; Flows &amp; Patterns (D3)</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --neocloud: #e0699b;
+    --leasing:  #2a78d6;
+    --selfbuilt:#9085e9;
+    --near: #1baf7a;
+    --mid: #eda100;
+    --far: #d03b3b;
+    --warning: #fab219;
+    --shadow: 0 1px 2px rgba(11,11,11,0.05), 0 1px 3px rgba(11,11,11,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface-1: #1a1a19;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --neocloud: #e87ba4;
+      --leasing:  #3987e5;
+      --selfbuilt:#9d93f0;
+      --near: #199e70;
+      --mid: #c98500;
+      --far: #e66767;
+      --warning: #fab219;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.45; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  nav.pagenav { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  nav.pagenav a {
+    font-size: 13px; padding: 6px 14px; border-radius: 999px; text-decoration: none;
+    border: 1px solid var(--border); color: var(--text-secondary); background: var(--surface-1);
+  }
+  nav.pagenav a.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header .sub { color: var(--text-secondary); font-size: 15px; margin: 0 0 4px; }
+  header .src { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+  .banner {
+    margin: 22px 0 26px; padding: 14px 16px; border-radius: 10px;
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface-1));
+    border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);
+  }
+  .banner b { color: var(--text-primary); }
+  .section-label {
+    font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+    margin: 30px 0 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ""; flex: 1; height: 1px; background: var(--gridline); }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 20px; box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .card h2 { font-size: 16.5px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .card .cap { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+  .card .cap .cell { color: var(--muted); }
+  .controls { display: flex; gap: 6px; margin: 2px 0 12px; flex-wrap: wrap; align-items: center; }
+  .controls .lbl { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+  .controls button {
+    font: inherit; font-size: 12.5px; padding: 5px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer;
+  }
+  .controls button.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 2px; font-size: 12.5px; color: var(--text-secondary); }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .takeaway { font-size: 13px; color: var(--text-secondary); margin-top: 12px; padding-left: 12px;
+    border-left: 3px solid var(--series-1); }
+  .takeaway b { color: var(--text-primary); }
+  svg.viz { width: 100%; height: auto; display: block; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .tip {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .08s;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 8px 10px; font-size: 12px; color: var(--text-primary);
+    max-width: 250px; z-index: 20;
+  }
+  footer { margin-top: 34px; color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+</head>
+<body data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
+<div class="wrap">
+  <nav class="pagenav">
+    <a href="dashboard.html">Supply vs Shortfall</a>
+    <a href="chips_dashboard.html">Chips &amp; Buildout</a>
+    <a href="compute_dashboard.html">Compute &amp; Energy</a>
+    <a href="synthesis_dashboard.html">Synthesis</a>
+    <a href="geo_dashboard.html">Geography &amp; Deployment</a>
+    <a href="flows_dashboard.html" class="active">Flows &amp; Patterns</a>
+  </nav>
+  <header>
+    <h1>US Data Centers &mdash; Flows &amp; Patterns</h1>
+    <p class="sub">Four D3 views of the same 2026&ndash;28 buildout: where the GW flow, who is building where, how the mix evolves, and when capacity lands.</p>
+    <p class="src" id="src-line"></p>
+  </header>
+
+  <div class="banner">
+    <b>All four graphics are built from the facility-level supply model</b>
+    (<span class="cell" id="src-model"></span>, <i>NA Data Center Supply</i>) &mdash; the same 2026&ndash;28 cohort as the map page.
+    Deployment class (self-built / leasing / neocloud) is the same <b>derived heuristic</b>; pipeline distance is the vendored EIA layer.
+    Colors: <b style="color:var(--selfbuilt)">Self-built</b> &middot; <b style="color:var(--leasing)">Leasing</b> &middot; <b style="color:var(--neocloud)">Neocloud</b>.
+  </div>
+
+  <div class="section-label">Flow &middot; company &rarr; deployment &rarr; pipeline</div>
+  <div class="card">
+    <h2>1. How GW Flows: Company &rarr; Deployment Type &rarr; Pipeline Proximity</h2>
+    <p class="cap">Each ribbon is GW of 2026&ndash;28 capacity flowing from an operator, through how it is deployed, to its distance from the nearest gas pipeline. Hover a node or ribbon to isolate it. <span class="cell">(geo.facilities: co, cls, pipe_mi, gw)</span></p>
+    <svg id="sankey" class="viz"></svg>
+    <p class="takeaway" id="sankey-take"></p>
+  </div>
+
+  <div class="section-label">Hierarchy &middot; state &rarr; company</div>
+  <div class="card">
+    <h2>2. Who Is Building Where &mdash; State &rarr; Company (click to zoom)</h2>
+    <p class="cap">2026&ndash;28 capacity as nested bubbles: outer circles are states, inner circles are operators; area &prop; GW, colored by each operator's dominant deployment type. <b>Click</b> a state to zoom in, click the background to zoom out. <span class="cell">(geo.facilities: st, co, gw, cls)</span></p>
+    <svg id="pack" class="viz" style="max-width:640px; margin:0 auto;"></svg>
+    <p class="hint" id="pack-hint">Click a state bubble to zoom; click empty space to reset.</p>
+  </div>
+
+  <div class="section-label">Evolution &middot; mix over time</div>
+  <div class="card">
+    <h2>3. Deployment Mix Over Time &mdash; Streamgraph</h2>
+    <p class="cap">Year-end US facility capacity by deployment type as a flowing stream (thickness = GW). <span class="cell">(geo.capacity_by_deploy)</span></p>
+    <div class="controls" id="stream-controls">
+      <span class="lbl">Period</span>
+      <button data-gran="annual" class="active">Annual</button>
+      <button data-gran="quarterly">Quarterly</button>
+    </div>
+    <div class="legend" id="stream-legend"></div>
+    <svg id="stream" class="viz"></svg>
+    <p class="takeaway" id="stream-take"></p>
+  </div>
+
+  <div class="section-label">Timing &middot; when capacity lands</div>
+  <div class="card">
+    <h2>4. Go-Live Timing &mdash; Beeswarm</h2>
+    <p class="cap">One dot per facility, placed by modeled go-live year; radius &prop; GW, colored by deployment type. Bigger, later dots are the large sites still ramping. <span class="cell">(geo.facilities: yr, gw, cls)</span></p>
+    <div class="legend" id="swarm-legend"></div>
+    <svg id="swarm" class="viz"></svg>
+    <p class="hint" id="swarm-note"></p>
+  </div>
+
+  <footer>Generated by <code>build_dashboard.py</code> &middot; self-contained &middot; visuals via vendored D3 v7 + d3-sankey</footer>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>/*__D3__*/</script>
+<script>/*__SANKEY__*/</script>
+<script>
+const DATA = __DATA__;
+const facs = DATA.geo.facilities.facilities;
+
+function cssv(name){ return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+function fmt(v,d){ return (v==null?'':Number(v).toFixed(d==null?1:d)); }
+function alpha(hex,a){ const h=hex.replace('#',''); const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);
+  return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
+const CLS = [
+  {key:'selfbuilt', label:'Self-built', varn:'--selfbuilt'},
+  {key:'leasing',   label:'Leasing',    varn:'--leasing'},
+  {key:'neocloud',  label:'Neocloud',   varn:'--neocloud'},
+];
+function clsColor(k){ return cssv(CLS.find(c=>c.key===k).varn); }
+function clsLegend(elId){
+  document.getElementById(elId).innerHTML = CLS.map(c =>
+    '<span class="item"><span class="dot" style="background:'+cssv(c.varn)+'"></span>'+c.label+'</span>').join('');
+}
+
+const tip = document.getElementById('tip');
+function showTip(html,e){ tip.innerHTML=html; tip.style.opacity=1; moveTip(e); }
+function moveTip(e){ let x=e.clientX+14, y=e.clientY+14;
+  if(x>window.innerWidth-260) x=e.clientX-246; if(y>window.innerHeight-90) y=e.clientY-80;
+  tip.style.left=x+'px'; tip.style.top=y+'px'; }
+function hideTip(){ tip.style.opacity=0; }
+
+// --------------------------------------------------------------------------- //
+// 1. Sankey: company -> deployment class -> pipeline proximity
+// --------------------------------------------------------------------------- //
+function buildSankey(){
+  const W=900, H=460, svg=d3.select('#sankey').attr('viewBox',[0,0,W,H]);
+  svg.selectAll('*').remove();
+  const bucketOf = mi => (mi==null||mi>25) ? '>25 mi' : (mi<=5 ? '≤5 mi' : '5–25 mi');
+  const clsLabel = {selfbuilt:'Self-built', leasing:'Leasing', neocloud:'Neocloud'};
+  const compTot = d3.rollup(facs, v=>d3.sum(v,d=>d.gw), d=>d.co);
+  const top = new Set([...compTot].sort((a,b)=>b[1]-a[1]).slice(0,12).map(d=>d[0]));
+  const cn = co => top.has(co) ? co : 'Other';
+
+  const nodes=[], idx=new Map();
+  const ni = (label,type,key) => { const id=type+'|'+label;
+    if(!idx.has(id)){ idx.set(id, nodes.length); nodes.push({label,type,key}); } return idx.get(id); };
+  const L = new Map();
+  const addL = (s,t,cls,v) => { const k=s+'>'+t; if(!L.has(k)) L.set(k,{source:s,target:t,cls,value:0}); L.get(k).value+=v; };
+  facs.forEach(f => {
+    const c=ni(cn(f.co),'company'), cl=ni(clsLabel[f.cls],'class',f.cls), b=ni(bucketOf(f.pipe_mi),'bucket');
+    addL(c,cl,f.cls,f.gw); addL(cl,b,f.cls,f.gw);
+  });
+  const sk = d3.sankey().nodeWidth(14).nodePadding(10).nodeSort(null).extent([[6,6],[W-6,H-6]]);
+  const graph = sk({ nodes: nodes.map(d=>Object.assign({},d)), links: [...L.values()].map(d=>Object.assign({},d)) });
+  const bucketColor = {'≤5 mi':cssv('--near'), '5–25 mi':cssv('--mid'), '>25 mi':cssv('--far')};
+  const nodeColor = d => d.type==='class' ? clsColor(d.key) : d.type==='bucket' ? bucketColor[d.label] : cssv('--muted');
+
+  const link = svg.append('g').attr('fill','none').selectAll('path').data(graph.links).join('path')
+    .attr('d', d3.sankeyLinkHorizontal())
+    .attr('stroke', d=>clsColor(d.cls)).attr('stroke-opacity', 0.4)
+    .attr('stroke-width', d=>Math.max(1,d.width))
+    .on('mouseover',(e,d)=>{ link.attr('stroke-opacity',0.08); d3.select(e.currentTarget).attr('stroke-opacity',0.75);
+      showTip('<b>'+fmt(d.value)+' GW</b><br>'+d.source.label+' → '+d.target.label, e); })
+    .on('mousemove',moveTip).on('mouseout',()=>{ link.attr('stroke-opacity',0.4); hideTip(); });
+
+  const node = svg.append('g').selectAll('g').data(graph.nodes).join('g');
+  node.append('rect').attr('x',d=>d.x0).attr('y',d=>d.y0).attr('width',d=>d.x1-d.x0)
+    .attr('height',d=>Math.max(1,d.y1-d.y0)).attr('rx',2).attr('fill',nodeColor)
+    .on('mouseover',(e,d)=>{ link.attr('stroke-opacity',l=>(l.source===d||l.target===d)?0.75:0.08);
+      showTip('<b>'+d.label+'</b><br>'+fmt(d.value)+' GW', e); })
+    .on('mousemove',moveTip).on('mouseout',()=>{ link.attr('stroke-opacity',0.4); hideTip(); });
+  node.append('text').attr('x',d=>d.x0<W/2?d.x1+6:d.x0-6).attr('y',d=>(d.y0+d.y1)/2).attr('dy','0.35em')
+    .attr('text-anchor',d=>d.x0<W/2?'start':'end').attr('fill',cssv('--text-secondary')).attr('font-size',10.5)
+    .attr('paint-order','stroke').attr('stroke',cssv('--surface-1')).attr('stroke-width',2.5)
+    .text(d=>(d.y1-d.y0)>=8 ? d.label+' ('+fmt(d.value,0)+')' : '');
+
+  const near = facs.filter(f=>f.pipe_mi!=null && f.pipe_mi<=5).reduce((s,f)=>s+f.gw,0);
+  const tot = facs.reduce((s,f)=>s+f.gw,0);
+  document.getElementById('sankey-take').innerHTML =
+    'Left-to-right: the ~12 largest operators, then self-built vs leasing vs neocloud, then pipeline proximity. '+
+    '<b>'+fmt(near)+' GW</b> ('+fmt(100*near/tot,0)+'%) of the flow lands within 5 mi of a gas pipeline.';
+}
+
+// --------------------------------------------------------------------------- //
+// 2. Zoomable circle-pack: state -> company
+// --------------------------------------------------------------------------- //
+function buildPack(){
+  const S=620, svg=d3.select('#pack').attr('viewBox',[-S/2,-S/2,S,S]).style('cursor','pointer');
+  svg.selectAll('*').remove();
+  const dom = d3.rollup(facs, v=>{ const m=d3.rollup(v,x=>d3.sum(x,d=>d.gw),d=>d.cls);
+    return [...m].sort((a,b)=>b[1]-a[1])[0][0]; }, d=>d.st, d=>d.co);
+  const byState = d3.rollup(facs, v=>d3.sum(v,d=>d.gw), d=>d.st, d=>d.co);
+  const rootData = {name:'US', children:[...byState].map(([st,cm]) =>
+    ({name:st, children:[...cm].map(([co,gw]) => ({name:co, value:gw, cls:dom.get(st).get(co)}))}))};
+  const root = d3.pack().size([S,S]).padding(3)(
+    d3.hierarchy(rootData).sum(d=>d.value).sort((a,b)=>b.value-a.value));
+  let focus=root, view;
+  const g = svg.append('g');
+  const node = g.selectAll('circle').data(root.descendants().slice(1)).join('circle')
+    .attr('fill', d=> d.children ? alpha(cssv('--muted'),0.10) : alpha(clsColor(d.data.cls),0.85))
+    .attr('stroke', d=> d.children ? cssv('--baseline') : 'none').attr('stroke-width',0.7)
+    .on('mouseover',(e,d)=>showTip('<b>'+d.data.name+'</b><br>'+fmt(d.value)+' GW'+(d.children?' · '+d.children.length+' operators':''), e))
+    .on('mousemove',moveTip).on('mouseout',hideTip)
+    .on('click',(e,d)=>{ if(focus!==d){ zoom(e,d); e.stopPropagation(); } });
+  const label = g.selectAll('text').data(root.descendants().slice(1)).join('text')
+    .attr('text-anchor','middle').attr('fill',cssv('--text-primary')).attr('font-size',10)
+    .attr('paint-order','stroke').attr('stroke',cssv('--surface-1')).attr('stroke-width',2.5)
+    .style('pointer-events','none')
+    .style('fill-opacity', d=>d.parent===root?1:0)
+    .style('display', d=>d.parent===root?'inline':'none')
+    .text(d=> d.data.name.length>15 ? d.data.name.slice(0,14)+'…' : d.data.name);
+  svg.on('click',()=>zoom(null,root));
+  zoomTo([root.x, root.y, root.r*2]);
+
+  function zoomTo(v){ const k=S/v[2]; view=v;
+    label.attr('transform', d=>`translate(${(d.x-v[0])*k},${(d.y-v[1])*k})`);
+    node.attr('transform', d=>`translate(${(d.x-v[0])*k},${(d.y-v[1])*k})`);
+    node.attr('r', d=>d.r*k);
+  }
+  function zoom(e,d){ focus=d;
+    const tr = svg.transition().duration(640).tween('zoom',()=>{
+      const i=d3.interpolateZoom(view,[focus.x,focus.y,focus.r*2]); return t=>zoomTo(i(t)); });
+    label.transition(tr).style('fill-opacity', l=>l.parent===focus?1:0)
+      .on('start', function(l){ if(l.parent===focus) this.style.display='inline'; })
+      .on('end',   function(l){ if(l.parent!==focus) this.style.display='none'; });
+    if(e) e.stopPropagation();
+  }
+}
+
+// --------------------------------------------------------------------------- //
+// 3. Streamgraph: capacity by deployment type over time
+// --------------------------------------------------------------------------- //
+let streamGran='annual';
+function buildStream(){
+  const W=900, H=340, m={t:12,r:12,b:26,l:12}, svg=d3.select('#stream').attr('viewBox',[0,0,W,H]);
+  svg.selectAll('*').remove();
+  const cbd=DATA.geo.capacity_by_deploy;
+  let labels, series, start;
+  if(streamGran==='quarterly'){ labels=cbd.quarters.slice(); series=cbd.quarterly; start=Math.max(cbd.quarters.indexOf('4Q23'),0); }
+  else { labels=cbd.years.map(String); series=cbd.annual; start=Math.max(cbd.years.indexOf(2022),0); }
+  labels=labels.slice(start);
+  const keys=['selfbuilt','leasing','neocloud'];
+  const rows=labels.map((lab,i)=>{ const o={lab}; keys.forEach(k=>o[k]=series[k][start+i]); return o; });
+  const layers=d3.stack().keys(keys).offset(d3.stackOffsetWiggle).order(d3.stackOrderInsideOut)(rows);
+  const x=d3.scalePoint().domain(labels).range([m.l,W-m.r]);
+  const y=d3.scaleLinear()
+    .domain([d3.min(layers,l=>d3.min(l,d=>d[0])), d3.max(layers,l=>d3.max(l,d=>d[1]))]).range([H-m.b,m.t]);
+  const area=d3.area().x((d,i)=>x(labels[i])).y0(d=>y(d[0])).y1(d=>y(d[1])).curve(d3.curveBasis);
+  svg.append('g').selectAll('path').data(layers).join('path')
+    .attr('d',area).attr('fill',l=>clsColor(l.key)).attr('fill-opacity',0.85);
+  const step=Math.max(1,Math.ceil(labels.length/12));
+  svg.append('g').selectAll('text').data(labels.filter((d,i)=>i%step===0)).join('text')
+    .attr('x',d=>x(d)).attr('y',H-6).attr('text-anchor','middle').attr('font-size',10).attr('fill',cssv('--muted')).text(d=>d);
+  const guide=svg.append('line').attr('y1',m.t).attr('y2',H-m.b).attr('stroke',cssv('--baseline')).attr('stroke-width',1).style('opacity',0);
+  svg.append('rect').attr('width',W).attr('height',H).attr('fill','transparent')
+    .on('mousemove',(e)=>{ const mx=d3.pointer(e)[0]; let bi=0,bd=1e9;
+      labels.forEach((l,i)=>{ const dd=Math.abs(x(l)-mx); if(dd<bd){bd=dd;bi=i;} });
+      guide.attr('x1',x(labels[bi])).attr('x2',x(labels[bi])).style('opacity',1);
+      const r=rows[bi];
+      showTip('<b>'+labels[bi]+'</b><br>Self-built '+fmt(r.selfbuilt)+' · Leasing '+fmt(r.leasing)+' · Neocloud '+fmt(r.neocloud)+' GW', e); })
+    .on('mouseout',()=>{ guide.style('opacity',0); hideTip(); });
+  const y28=cbd.years.indexOf(2028);
+  document.getElementById('stream-take').innerHTML =
+    'Self-built capacity widens fastest through 2028 (year-end '+fmt(cbd.annual.selfbuilt[y28])+' GW), with leasing '+
+    fmt(cbd.annual.leasing[y28])+' GW and neocloud '+fmt(cbd.annual.neocloud[y28])+' GW. Toggle to quarterly for the finer ramp.';
+}
+
+// --------------------------------------------------------------------------- //
+// 4. Beeswarm: facilities by go-live year
+// --------------------------------------------------------------------------- //
+function buildSwarm(){
+  const W=900, H=340, m={t:16,b:28}, svg=d3.select('#swarm').attr('viewBox',[0,0,W,H]);
+  svg.selectAll('*').remove();
+  const cats=['2026','2027','2028','2029+'];
+  const bcat=yr=> (yr==null||yr<2026) ? null : (yr>=2029 ? '2029+' : String(yr));
+  const nodes=facs.map(f=>Object.assign({},f,{cat:bcat(f.yr)})).filter(d=>d.cat);
+  const x=d3.scalePoint().domain(cats).range([90,W-40]).padding(0.5);
+  const r=d3.scaleSqrt().domain([0,d3.max(nodes,d=>d.gw)||1]).range([2,20]);
+  const sim=d3.forceSimulation(nodes)
+    .force('x',d3.forceX(d=>x(d.cat)).strength(0.9))
+    .force('y',d3.forceY(H/2).strength(0.05))
+    .force('collide',d3.forceCollide(d=>r(d.gw)+1).iterations(2)).stop();
+  for(let i=0;i<230;i++) sim.tick();
+  svg.append('g').selectAll('text.axis').data(cats).join('text').attr('class','axis')
+    .attr('x',d=>x(d)).attr('y',H-8).attr('text-anchor','middle').attr('font-size',11).attr('fill',cssv('--muted')).text(d=>d);
+  svg.append('g').selectAll('circle').data(nodes).join('circle')
+    .attr('cx',d=>d.x).attr('cy',d=>d.y).attr('r',d=>r(d.gw))
+    .attr('fill',d=>clsColor(d.cls)).attr('fill-opacity',0.72)
+    .attr('stroke',cssv('--surface-1')).attr('stroke-width',0.4)
+    .on('mouseover',(e,d)=>showTip('<b>'+(d.co||'Unknown')+'</b><br>'+[d.city,d.st].filter(Boolean).join(', ')+'<br>'+fmt(d.gw,2)+' GW · live '+d.yr, e))
+    .on('mousemove',moveTip).on('mouseout',hideTip);
+  const shownGw=nodes.reduce((s,d)=>s+d.gw,0);
+  document.getElementById('swarm-note').textContent =
+    nodes.length+' of '+facs.length+' facilities shown ('+fmt(shownGw)+' GW); the rest lack a modeled 2026–+ go-live year.';
+}
+
+// --------------------------------------------------------------------------- //
+// init
+// --------------------------------------------------------------------------- //
+document.getElementById('src-line').textContent =
+  'Source: ' + DATA.meta.model_file + ' (NA Data Center Supply) + vendored EIA gas pipelines.';
+document.getElementById('src-model').textContent = DATA.meta.model_file;
+clsLegend('stream-legend');
+clsLegend('swarm-legend');
+
+function buildAll(){ buildSankey(); buildPack(); buildStream(); buildSwarm(); }
+buildAll();
+
+document.querySelectorAll('#stream-controls button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#stream-controls button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); streamGran=b.dataset.gran; buildStream();
+  });
+});
+
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { clsLegend('stream-legend'); clsLegend('swarm-legend'); buildAll(); });
+}
+</script>
+</body>
+</html>
