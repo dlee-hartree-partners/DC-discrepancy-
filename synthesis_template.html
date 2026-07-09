@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synthesis: Delays &amp; the Chip-vs-Buildout Race</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --series-2: #1baf7a;
+    --series-3: #eda100;
+    --series-4: #008300;
+    --series-5: #eb6834;
+    --series-6: #4a3aa7;
+    --series-7: #e34948;
+    --series-8: #e87ba4;
+    --critical: #d03b3b;
+    --good: #0ca30c;
+    --warning: #fab219;
+    --shadow: 0 1px 2px rgba(11,11,11,0.05), 0 1px 3px rgba(11,11,11,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface-1: #1a1a19;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-2: #199e70;
+      --series-3: #c98500;
+      --series-4: #008300;
+      --series-5: #d95926;
+      --series-6: #9085e9;
+      --series-7: #e66767;
+      --series-8: #d55181;
+      --critical: #e66767;
+      --good: #0ca30c;
+      --warning: #fab219;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.45; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  nav.pagenav { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  nav.pagenav a {
+    font-size: 13px; padding: 6px 14px; border-radius: 999px; text-decoration: none;
+    border: 1px solid var(--border); color: var(--text-secondary); background: var(--surface-1);
+  }
+  nav.pagenav a.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header .sub { color: var(--text-secondary); font-size: 15px; margin: 0 0 4px; }
+  header .src { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+  .verdicts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 22px 0 8px; }
+  .verdict {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; box-shadow: var(--shadow); border-left: 4px solid var(--series-1);
+  }
+  .verdict .q { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .verdict .a { font-size: 16px; font-weight: 650; margin: 5px 0 6px; letter-spacing: -0.01em; }
+  .verdict .why { font-size: 13px; color: var(--text-secondary); }
+  .verdict.v2 { border-left-color: var(--series-5); }
+  .section-label {
+    font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+    margin: 30px 0 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ""; flex: 1; height: 1px; background: var(--gridline); }
+  .badge {
+    display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em;
+    padding: 2px 8px; border-radius: 999px; vertical-align: 2px; margin-left: 8px;
+    background: color-mix(in srgb, var(--series-2) 15%, var(--surface-1)); color: var(--series-2);
+    border: 1px solid color-mix(in srgb, var(--series-2) 35%, transparent);
+  }
+  .src-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 14px; }
+  .src-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; line-height: 1.3; padding: 3px 9px 3px 7px; border-radius: 999px;
+    background: color-mix(in srgb, var(--tagc) 12%, var(--surface-1));
+    border: 1px solid color-mix(in srgb, var(--tagc) 38%, transparent);
+    color: var(--text-secondary);
+  }
+  .src-tag b { color: var(--tagc); font-weight: 600; }
+  .src-tag .src-sep { color: var(--muted); margin: 0 1px; }
+  .src-ico { color: var(--tagc); flex: none; }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 20px; box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .card h2 { font-size: 16.5px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .card .cap { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+  .card .cap .cell { color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .chart-box { position: relative; height: 340px; }
+  .chart-box.tall { height: 380px; }
+  .chart-box.short { height: 300px; }
+  .takeaway { font-size: 13px; color: var(--text-secondary); margin-top: 12px; padding-left: 12px;
+    border-left: 3px solid var(--series-1); }
+  .takeaway b { color: var(--text-primary); }
+  .subhead { text-align: center; font-size: 12.5px; color: var(--muted); margin: 0 0 6px; }
+  footer { margin-top: 34px; color: var(--muted); font-size: 12px; text-align: center; }
+  @media (max-width: 820px) { .grid2, .verdicts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
+<div class="wrap">
+  <nav class="pagenav">
+    <a href="dashboard.html">Supply vs Shortfall</a>
+    <a href="chips_dashboard.html">Chips &amp; Buildout</a>
+    <a href="compute_dashboard.html">Compute &amp; Energy</a>
+    <a href="synthesis_dashboard.html" class="active">Synthesis</a>
+  </nav>
+  <header>
+    <h1>Synthesis &mdash; Delays &amp; the Chip-vs-Buildout Race <span class="badge">FOCUS 2026&ndash;2028</span></h1>
+    <p class="sub">Tying the chip demand story back to the AI data-center model: what the delays do to chip demand, and which side of the race is the constraint. Charts are scoped to 2026&ndash;2028 where the underlying data allows; each chart names the exact workbook and tab it's drawn from.</p>
+    <p class="src" id="src-line"></p>
+  </header>
+
+  <div class="verdicts">
+    <div class="verdict">
+      <div class="q">Q1 &middot; Do the delays damp chip demand?</div>
+      <div class="a">They defer it &mdash; they don't destroy it.</div>
+      <div class="why" id="v1-why"></div>
+    </div>
+    <div class="verdict v2">
+      <div class="q">Q2 &middot; Will chip supply outpace datacenter buildout?</div>
+      <div class="a">Yes, in most years &mdash; buildings are the binding constraint.</div>
+      <div class="why" id="v2-why"></div>
+    </div>
+  </div>
+
+  <div class="section-label">Q1 &middot; What delays do to demand</div>
+
+  <div class="card">
+    <h2>1. How the Forecast Moved Across ~40 Model Vintages</h2>
+    <p class="cap">The same three forecasts &mdash; global capacity in 2026, 2027 and 2028 &mdash; re-plotted from every monthly model snapshot, oldest &rarr; newest. The nearest year gets cut from its peak; the further-out years keep climbing.</p>
+    <div class="src-tags" id="src-1"></div>
+    <div class="chart-box tall"><canvas id="vintage"></canvas></div>
+    <p class="takeaway" id="vintage-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>2. Slippage Is Modeled In &mdash; and Demand Just Moves Right</h2>
+    <p class="cap">Left: the model's own go-live slippage per US facility (assumed actual-live minus nameplate). Right: AI power demand with chip-supply constraints (solid) vs unconstrained (dashed), 2026&ndash;2028 &mdash; the gap is deferred, not destroyed.</p>
+    <div class="src-tags" id="src-2"></div>
+    <div class="grid2">
+      <div><p class="subhead">Modeled go-live slippage (US facilities)</p><div class="chart-box"><canvas id="slippage"></canvas></div></div>
+      <div><p class="subhead">Constrained vs unconstrained AI power (GW), 2026&ndash;2028</p><div class="chart-box"><canvas id="conunc"></canvas></div></div>
+    </div>
+    <p class="takeaway" id="q1-take"></p>
+  </div>
+
+  <div class="section-label">Q2 &middot; The race: chips vs buildings</div>
+
+  <div class="card">
+    <h2>3. The Model's Own North America Balance</h2>
+    <p class="cap">Yearly capacity added vs incremental power demand, 2026&ndash;2028, with the resulting surplus/(deficit).</p>
+    <div class="src-tags" id="src-3"></div>
+    <div class="chart-box tall"><canvas id="balance"></canvas></div>
+    <p class="takeaway" id="balance-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>4. Cumulative Deficit &mdash; and the Chip-vs-Building Race</h2>
+    <p class="cap">Left: the cumulative NA balance, 2026&ndash;2028 (it never turns positive across the model's full history). Right: the power the year's NVL72 racks require vs what actually gets built in NA &mdash; the rack tracker only runs through 2027.</p>
+    <div class="src-tags" id="src-4"></div>
+    <div class="grid2">
+      <div><p class="subhead">Cumulative NA surplus/(deficit), GW</p><div class="chart-box"><canvas id="cumbal"></canvas></div></div>
+      <div><p class="subhead">Chip-implied power vs NA capacity added (GW)</p><div class="chart-box"><canvas id="race"></canvas></div></div>
+    </div>
+    <p class="takeaway" id="q2-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>5. Who Builds When &mdash; Annual Additions by Company</h2>
+    <p class="cap">Per-company capacity additions, 2026&ndash;2028 &mdash; the years the buildout wave is cresting.</p>
+    <div class="src-tags" id="src-5"></div>
+    <div class="chart-box tall"><canvas id="companyadds"></canvas></div>
+    <p class="takeaway" id="adds-take"></p>
+  </div>
+
+  <div class="section-label">Q3 &middot; Where the spreadsheets disagree</div>
+
+  <div class="card">
+    <h2>6. One Question, Three Answers</h2>
+    <p class="cap">"Is there enough US/NA capacity in 2026&ndash;28?" answered by each lens: the client's shortfall analysis, the model's own cumulative NA balance (worst year in window), and the raw facility pipeline vs client demand.</p>
+    <div class="src-tags" id="src-6"></div>
+    <div class="chart-box"><canvas id="threeanswers"></canvas></div>
+    <p class="takeaway" id="three-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>7. Chip-Unit Outlooks by Source &mdash; and the US Power Gap</h2>
+    <p class="cap">Left: total accelerator units per year according to each source, 2026&ndash;2028 (MS is Nvidia-only &mdash; narrower scope, and stops at 2027). Right: 2028 US/NA power demand, client vs model.</p>
+    <div class="src-tags" id="src-7"></div>
+    <div class="grid2">
+      <div><p class="subhead">Accelerator units (millions/yr), 2026&ndash;2028</p><div class="chart-box"><canvas id="chipfan"></canvas></div></div>
+      <div><p class="subhead">2028 power demand (GW)</p><div class="chart-box"><canvas id="usgap"></canvas></div></div>
+    </div>
+    <p class="takeaway" id="fan-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>8. Sharpest Company-Level Delay: Oracle Overseas</h2>
+    <p class="cap">Latest single-revision cut to Oracle's <i>overseas</i> DC capacity forecast, 2026&ndash;2028 &mdash; a large relative cut on a small (~1.3 GW) base.</p>
+    <div class="src-tags" id="src-8"></div>
+    <div class="chart-box short"><canvas id="oracle"></canvas></div>
+    <p class="takeaway" id="oracle-take"></p>
+  </div>
+
+  <footer>Generated by <code>build_dashboard.py</code> &middot; self-contained &middot; charts via vendored Chart.js</footer>
+</div>
+
+<script>/*__CHARTJS__*/</script>
+<script>
+const DATA = __DATA__;
+const SY = DATA.synthesis;
+const CU = DATA.compute.customer;
+const CC = DATA.chips.client;
+const charts = [];
+
+function cssv(n){ return getComputedStyle(document.body).getPropertyValue(n).trim(); }
+function fmt(v,d){ return (v==null?'':Number(v).toFixed(d==null?1:d)); }
+function fmtK(v){ return Number(v).toLocaleString('en-US',{maximumFractionDigits:0}); }
+const S = i => cssv('--series-'+i);
+
+// -- source attribution: exact workbook + tab per chart --
+const FILE_META = {
+  client: { name: DATA.meta.client_file, colorVar: '--series-3' },
+  model:  { name: DATA.meta.model_file,  colorVar: '--series-1' },
+  nv:     { name: DATA.meta.nv_file,     colorVar: '--series-6' },
+};
+function srcTag(fileKey, sheet){
+  const f = FILE_META[fileKey];
+  return '<span class="src-tag" style="--tagc:var(' + f.colorVar + ')" title="' + f.name + ' → ' + sheet + '">'
+    + '<svg class="src-ico" viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">'
+    + '<path d="M3 1.5h6l4 4V14a.5.5 0 0 1-.5.5h-9A.5.5 0 0 1 3 14V2a.5.5 0 0 1 .5-.5Z" fill="none" stroke="currentColor" stroke-width="1.1"/>'
+    + '<path d="M9 1.5V5a.5.5 0 0 0 .5.5H13" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>'
+    + '<b>' + f.name + '</b><span class="src-sep">›</span>' + sheet + '</span>';
+}
+function fillSrc(id, ...pairs){
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = pairs.map(p => srcTag(p[0], p[1])).join('');
+}
+function renderSourceTags(){
+  fillSrc('src-1', ['model', 'Revisions vs prior versions']);
+  fillSrc('src-2', ['model', 'NA Data Center Supply'], ['model', 'AI Demand by Customer'], ['model', 'Unconstrained AI Demand']);
+  fillSrc('src-3', ['model', 'NA DC Supply-Demand']);
+  fillSrc('src-4', ['model', 'NA DC Supply-Demand'], ['nv', 'GB200-300 Tracker'], ['nv', 'Nvidia Rack Layout'], ['client', 'Power Summary']);
+  fillSrc('src-5', ['model', 'Dashboard']);
+  fillSrc('src-6', ['client', 'US Shortfall Analysis'], ['model', 'NA DC Supply-Demand'], ['model', 'NA Data Center Supply']);
+  fillSrc('src-7', ['client', 'Power Summary'], ['model', 'AI Demand by Customer'], ['model', 'Unconstrained AI Demand'], ['nv', 'ODM share analysis'], ['model', 'NA DC Supply-Demand']);
+  fillSrc('src-8', ['model', 'Revisions vs prior versions']);
+}
+
+function baseOpts(text, muted, grid, yTitle){
+  return {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:text, boxWidth:12, boxHeight:12, usePointStyle:true, font:{size:12}}}, tooltip:{callbacks:{}} },
+    scales:{
+      x:{ticks:{color:muted,font:{size:11}}, grid:{display:false}, border:{color:cssv('--baseline')}},
+      y:{ticks:{color:muted,font:{size:11}}, grid:{color:grid}, border:{display:false},
+         title:{display:!!yTitle, text:yTitle||'', color:muted, font:{size:11}}}
+    }
+  };
+}
+
+// verdict text
+(function(){
+  const rev = SY.revisions.vintages;
+  const first = rev[0], cur = rev[rev.length-1];
+  const peak26 = Math.max(...rev.map(v=>v.y2026));
+  const u = SY.unconstrained, c = CU;
+  const u26=u.ai_power_mw[u.years.indexOf(2026)]/1000, c26=c.ai_power_mw[c.years.indexOf(2026)]/1000;
+  const u28=u.ai_power_mw[u.years.indexOf(2028)]/1000, c28=c.ai_power_mw[c.years.indexOf(2028)]/1000;
+  document.getElementById('v1-why').innerHTML =
+    '2026 capacity was cut <b>'+fmt(100*(1-cur.y2026/peak26),0)+'%</b> from its forecast peak, while the 2028 forecast is still climbing &mdash; up '+fmt(100*(cur.y2028/first.y2028-1),0)+'% from its first version to an all-time high ('+fmt(cur.y2028/1000,0)+' GW). Within 2026&ndash;28, constrained chip demand trails the unconstrained curve by '+fmt(u26-c26,0)+' GW in 2026, widening to '+fmt(u28-c28,0)+' GW ('+fmt(100*(1-c28/u28),0)+'%) by 2028 &mdash; deferred, not destroyed.';
+  const bal = SY.balance;
+  const c26v=bal.surplus_deficit_mw[bal.years.indexOf(2026)]/1000, c27v=bal.surplus_deficit_mw[bal.years.indexOf(2027)]/1000, c28v=bal.surplus_deficit_mw[bal.years.indexOf(2028)]/1000;
+  document.getElementById('v2-why').innerHTML =
+    'Within 2026&ndash;28 the model\'s own NA balance runs short in 2026 ('+fmt(c26v,1)+' GW) and 2027 ('+fmt(c27v,1)+' GW) before a '+fmt(c28v,1)+' GW surplus in 2028 as the hyperscaler build wave lands. But the <b>cumulative</b> balance stays negative in all three years, and a single year of NVL72 racks already needs more power than NA actually adds in both 2026 and 2027.';
+})();
+
+// 1. vintage evolution
+function buildVintage(text,muted,grid){
+  const v = SY.revisions.vintages;
+  const labels = v.map(x=>x.label);
+  charts.push(new Chart(document.getElementById('vintage'), {
+    type:'line',
+    data:{ labels,
+      datasets:[
+        {label:'2028 forecast', data:v.map(x=>x.y2028/1000), borderColor:S(6), backgroundColor:S(6), borderWidth:2.5, pointRadius:0, tension:0.25},
+        {label:'2027 forecast', data:v.map(x=>x.y2027/1000), borderColor:S(5), backgroundColor:S(5), borderWidth:2.5, pointRadius:0, tension:0.25},
+        {label:'2026 forecast', data:v.map(x=>x.y2026/1000), borderColor:S(1), backgroundColor:S(1), borderWidth:2.5, pointRadius:0, tension:0.25}
+      ]},
+    options: Object.assign(baseOpts(text,muted,grid,'GW (global capacity)'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{title:(i)=>'Vintage: '+i[0].label, label:(i)=>i.dataset.label+': '+fmt(i.raw,0)+' GW'}} },
+      scales:{ x:{ticks:{color:muted,font:{size:9},maxRotation:60,minRotation:60,autoSkip:true,maxTicksLimit:14},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW (global capacity)',color:muted}} }
+    })
+  }));
+  const first=v[0], cur=v[v.length-1];
+  const peak26=Math.max(...v.map(x=>x.y2026));
+  const peak27=Math.max(...v.map(x=>x.y2027));
+  document.getElementById('vintage-take').innerHTML =
+    '<b>"Slower now, bigger later" &mdash; and you can watch it happen year by year.</b> The 2026 forecast peaked at '+fmt(peak26/1000,0)+' GW, then was already cut '+fmt(100*(1-cur.y2026/peak26),0)+'% to '+fmt(cur.y2026/1000,0)+' GW as construction slipped. 2027 sits just '+fmt(100*(1-cur.y2027/peak27),1)+'% off its own peak and '+fmt(100*(cur.y2027/first.y2027-1),0)+'% above its first-version forecast &mdash; the cutting hasn\'t started yet. 2028, still furthest out, keeps climbing: up <b>'+fmt(100*(cur.y2028/first.y2028-1),0)+'%</b> from its first version to an all-time high of '+fmt(cur.y2028/1000,0)+' GW &mdash; exactly the stage 2026 was at a year or two ago.';
+}
+
+// 2a. slippage histogram + 2b. constrained vs unconstrained
+function buildQ1(text,muted,grid){
+  const sl = SY.slippage;
+  const labs = Object.keys(sl.buckets);
+  charts.push(new Chart(document.getElementById('slippage'), {
+    type:'bar',
+    data:{ labels: labs, datasets:[{label:'facilities', data: labs.map(k=>sl.buckets[k]),
+      backgroundColor:[S(2),S(2),S(3),S(5),cssv('--critical')], borderRadius:4, borderSkipped:false}]},
+    options: Object.assign(baseOpts(text,muted,grid,'facilities'), {
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmtK(i.raw)+' facilities'}} }
+    })
+  }));
+
+  const u = SY.unconstrained, c = CU;
+  const years = [2026, 2027, 2028];
+  const cv = years.map(y=>{const i=c.years.indexOf(y); return i>=0? c.ai_power_mw[i]/1000 : null;});
+  const uv = years.map(y=>{const i=u.years.indexOf(y); return i>=0? u.ai_power_mw[i]/1000 : null;});
+  charts.push(new Chart(document.getElementById('conunc'), {
+    type:'line',
+    data:{ labels: years, datasets:[
+      {label:'Unconstrained (chip-supply-driven)', data:uv, borderColor:S(6), backgroundColor:S(6),
+       borderWidth:2, borderDash:[6,4], pointRadius:4, tension:0.25},
+      {label:'Constrained (actual model)', data:cv, borderColor:S(1),
+       backgroundColor:(function(){const c1=cssv('--series-1'); const h=c1.replace('#',''); const n=parseInt(h,16);
+         return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+',0.18)';})(),
+       borderWidth:2.5, pointRadius:4, tension:0.25, fill:'-1'}
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid,'GW'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12,font:{size:11.5}}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} }
+    })
+  }));
+  const u26=u.ai_power_mw[u.years.indexOf(2026)]/1000, c26=c.ai_power_mw[c.years.indexOf(2026)]/1000;
+  const u28=u.ai_power_mw[u.years.indexOf(2028)]/1000, c28=c.ai_power_mw[c.years.indexOf(2028)]/1000;
+  document.getElementById('q1-take').innerHTML =
+    'The model bakes a <b>median '+fmt(sl.median_mo,0)+'-month slip</b> into US go-live dates ('+fmt(sl.pct_ge_7mo,0)+'% of dated sites slip &ge;7 months, n='+fmtK(sl.n)+'). The effect on chips: constrained demand already trails unconstrained by <b>'+fmt(u26-c26,0)+' GW in 2026</b> ('+fmt(c26,0)+' vs '+fmt(u26,0)+' GW), widening to <b>'+fmt(u28-c28,0)+' GW by 2028</b> ('+fmt(c28,0)+' vs '+fmt(u28,0)+' GW, ~'+fmt(100*(1-c28/u28),0)+'%) &mdash; chip demand is throttled and pushed right, not cancelled.';
+}
+
+// 3. NA balance
+function buildBalance(text,muted,grid){
+  const b = SY.balance;
+  const i0 = b.years.indexOf(2026), i1 = b.years.indexOf(2028);
+  const yrs = b.years.slice(i0, i1+1);
+  const cut = a => a.slice(i0, i1+1).map(v=>v/1000);
+  const surp = cut(b.surplus_deficit_mw);
+  charts.push(new Chart(document.getElementById('balance'), {
+    type:'bar',
+    data:{ labels: yrs, datasets:[
+      {label:'Capacity added', data:cut(b.capacity_added_mw), backgroundColor:S(1), borderRadius:4, borderSkipped:false},
+      {label:'Incremental power demand', data:cut(b.incr_demand_mw), backgroundColor:S(3), borderRadius:4, borderSkipped:false},
+      {label:'Surplus/(deficit)', data:surp, backgroundColor:surp.map(v=>v>=0?cssv('--good'):cssv('--critical')), borderRadius:4, borderSkipped:false}
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid,'GW'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} }
+    })
+  }));
+  document.getElementById('balance-take').innerHTML =
+    'Additions fall just short of demand in <b>2026 ('+fmt(surp[0],1)+' GW) and 2027 ('+fmt(surp[1],1)+' GW)</b>, then swing to a <b>+'+fmt(surp[2],1)+' GW surplus in 2028</b> as the hyperscaler construction wave lands. That 2028 surplus is a burst, not a trend &mdash; see the cumulative view next.';
+}
+
+// 4. cumulative + race
+function buildQ2(text,muted,grid){
+  const b = SY.balance;
+  const i0 = b.years.indexOf(2026), i1 = b.years.indexOf(2028);
+  const yrs = b.years.slice(i0, i1+1);
+  const cum = b.cum_surplus_deficit_mw.slice(i0, i1+1).map(v=>v/1000);
+  charts.push(new Chart(document.getElementById('cumbal'), {
+    type:'bar',
+    data:{ labels: yrs, datasets:[{label:'GW', data: cum,
+      backgroundColor: cum.map(v=>v>=0?cssv('--good'):cssv('--critical')), borderRadius:4, borderSkipped:false}]},
+    options: Object.assign(baseOpts(text,muted,grid,'GW'), {
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmt(i.raw)+' GW'}} }
+    })
+  }));
+
+  const br = DATA.chips.bridge;
+  const raceYrs = br.years.filter(y=>y>=2026);                 // rack tracker stops at 2027
+  const implied = raceYrs.map(y=> br.implied_gw[br.years.indexOf(y)]);
+  const added = raceYrs.map(y=> b.capacity_added_mw[b.years.indexOf(y)]/1000);
+  charts.push(new Chart(document.getElementById('race'), {
+    type:'bar',
+    data:{ labels: raceYrs, datasets:[
+      {label:'Chip-implied power (NVL72 racks, global)', data: implied, backgroundColor:S(6), borderRadius:4, borderSkipped:false},
+      {label:'NA capacity added', data: added, backgroundColor:S(1), borderRadius:4, borderSkipped:false}
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid,'GW'), {
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12,font:{size:11.5}}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} }
+    })
+  }));
+  document.getElementById('q2-take').innerHTML =
+    'The cumulative NA balance stays <b>negative in all three years</b> ('+fmt(cum[0],1)+' GW in 2026, '+fmt(cum[1],1)+' in 2027, '+fmt(cum[2],1)+' in 2028) &mdash; the market runs structurally tight even where the yearly balance briefly turns positive. And the chip wave is faster: a single year of NVL72 racks already needs <b>'+fmt(implied[0],0)+' GW in 2026</b> and <b>'+fmt(implied[1],0)+' GW in 2027</b> versus just '+fmt(added[0],0)+' and '+fmt(added[1],0)+' GW of NA capacity actually added those years (excl. HGX servers; 2028 rack data isn\'t available) &mdash; <b>chip supply outpaces the buildings; power, not silicon, is the constraint.</b>';
+}
+
+// 5. company additions
+function buildAdds(text,muted,grid){
+  const da = SY.dash_adds;
+  const colors={AWS:S(1),Google:S(2),Meta:S(5),Microsoft:S(6),xAI:S(3),Nebius:S(8),Coreweave:S(7)};
+  const yrs = [2026, 2027, 2028];
+  const idx = yrs.map(y=>da.years.indexOf(y));
+  const keep = da.companies.filter(c=> idx.some(i=>c.values[i]>50));
+  charts.push(new Chart(document.getElementById('companyadds'), {
+    type:'bar',
+    data:{ labels: yrs, datasets: keep.map(c=>({label:c.name, data: idx.map(i=>c.values[i]/1000),
+      backgroundColor:colors[c.name]||cssv('--muted'), stack:'a', borderWidth:0}))},
+    options: Object.assign(baseOpts(text,muted,grid,'GW added / yr'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw,2)+' GW'}} },
+      scales:{ x:{stacked:true,ticks:{color:muted,font:{size:10.5}},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{stacked:true,ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW added / yr',color:muted}} }
+    })
+  }));
+  const at = (name,y) => (da.companies.find(c=>c.name===name).values[da.years.indexOf(y)]/1000).toFixed(1);
+  document.getElementById('adds-take').innerHTML =
+    'AWS adds the most every year in the window ('+at('AWS',2026)+' &rarr; '+at('AWS',2027)+' &rarr; '+at('AWS',2028)+' GW/yr), but <b>Microsoft\'s build accelerates fastest</b> (only '+at('Microsoft',2026)+' GW/yr in 2026, jumping to '+at('Microsoft',2028)+' GW/yr by 2028). AWS\'s true peak (6.8 GW/yr) actually lands in 2029, just outside this window. The mismatch in timing across companies is exactly why the balance chart above swings from deficit to brief surplus and back.';
+}
+
+// 6. three answers
+function buildThree(text,muted,grid){
+  const sf = DATA.shortfall.shortfall_before_solutions;               // 37.71
+  const b = SY.balance;
+  const worst = Math.min(...[2026,2027,2028].map(y=> b.cum_surplus_deficit_mw[b.years.indexOf(y)]))/1000;
+  const rec = DATA.reconciliation;
+  const pipeline = rec.model_us_additions_26_28 - rec.client_demand;  // +26.5
+  const vals=[-sf, worst, pipeline];
+  charts.push(new Chart(document.getElementById('threeanswers'), {
+    type:'bar',
+    data:{ labels:[['Client shortfall analysis','(needed before solutions)'],
+                   ['Model NA cumulative balance','(worst year 2026-28)'],
+                   ['Facility pipeline vs client demand','(2026-28 additions - demand)']],
+      datasets:[{label:'GW', data: vals,
+        backgroundColor: vals.map(v=>v>=0?cssv('--good'):cssv('--critical')), borderRadius:4, borderSkipped:false}]},
+    options: Object.assign(baseOpts(text,muted,grid,'GW surplus / (deficit)'), {
+      indexAxis:'y',
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmt(i.raw)+' GW'}} },
+      scales:{ x:{ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW surplus / (deficit)',color:muted}},
+        y:{ticks:{color:muted,font:{size:11.5}},grid:{display:false},border:{color:cssv('--baseline')}} }
+    })
+  }));
+  document.getElementById('three-take').innerHTML =
+    'Same question, <b>~64 GW of disagreement</b>: the client sees a &minus;'+fmt(sf)+' GW hole, the model\'s own balance a modest '+fmt(worst)+' GW worst-year deficit, and the raw facility pipeline a +'+fmt(pipeline,0)+' GW surplus. The spread is the difference between counting <i>announced</i> capacity, <i>probability-weighted</i> capacity, and <i>grid-connected</i> capacity.';
+}
+
+// 7. chip fan + US gap
+function buildFan(text,muted,grid){
+  const years=[2026,2027,2028];
+  const client = years.map(y=>{const i=CC.years.indexOf(y); return (CC.total_gpus[i]+CC.total_asics[i])/1000;});
+  const con = years.map(y=>{const i=CU.years.indexOf(y); return i>=0? CU.total_units_k[i]/1000 : null;});
+  const u = SY.unconstrained;
+  const unc = years.map(y=>{const i=u.years.indexOf(y); return i>=0? u.total_units_k[i]/1000 : null;});
+  const nvf = DATA.chips.nv.chip_families;
+  const ms = years.map(y=>{const i=DATA.chips.nv.chip_years.indexOf(y);
+    return i>=0? nvf.reduce((a,f)=>a+f.values[i],0)/1000 : null;});
+  charts.push(new Chart(document.getElementById('chipfan'), {
+    type:'line',
+    data:{ labels: years, datasets:[
+      {label:'Model unconstrained', data:unc, borderColor:S(6), backgroundColor:S(6), borderWidth:2, borderDash:[6,4], pointRadius:2, tension:0.25},
+      {label:'Client (GPUs+ASICs)', data:client, borderColor:S(3), backgroundColor:S(3), borderWidth:2.5, pointRadius:3, tension:0.25},
+      {label:'Model constrained', data:con, borderColor:S(1), backgroundColor:S(1), borderWidth:2.5, pointRadius:3, tension:0.25},
+      {label:'MS (Nvidia-only)', data:ms, borderColor:S(2), backgroundColor:S(2), borderWidth:2, pointRadius:2, tension:0.25}
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid,'million units / yr'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12,font:{size:11}}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw,1)+'M'}} }
+    })
+  }));
+
+  const b = SY.balance;
+  const na28 = b.total_demand_mw[b.years.indexOf(2028)]/1000;
+  const us28 = CC.us_power_gw[CC.us_power_gw.length-1];
+  charts.push(new Chart(document.getElementById('usgap'), {
+    type:'bar',
+    data:{ labels:[['Client','US total'],['Model','NA total']],
+      datasets:[{label:'GW', data:[us28, na28], backgroundColor:[S(3),S(1)], borderRadius:4, borderSkipped:false}]},
+    options: Object.assign(baseOpts(text,muted,grid,'GW'), {
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmt(i.raw)+' GW'}} }
+    })
+  }));
+  document.getElementById('fan-take').innerHTML =
+    'The unit outlooks span <b>'+fmt(ms[1],1)+'M (MS, Nvidia-only, 2027 &mdash; its last modeled year) to '+fmt(unc[2],1)+'M (unconstrained, 2028)</b> for the same market; the client sits '+fmt(100*(client[2]/con[2]-1),0)+'% above the model\'s constrained view in 2028. On power, the client\'s <b>US</b>-only 2028 figure ('+fmt(us28,0)+' GW) exceeds the model\'s <b>whole-NA</b> demand ('+fmt(na28,0)+' GW) by ~'+fmt(100*(us28/na28-1),0)+'% &mdash; the June client file is simply a much hotter outlook than the April model. One agreement: client 2028 GenAI average draw (91.5 GW) &asymp; 83% of the model\'s global AI capacity (110.4 GW).';
+}
+
+// 8. Oracle
+function buildOracle(text,muted,grid){
+  const o = SY.revisions;
+  const years = o.oracle_pct_years.slice(0, 3);        // 2026-2028
+  const pct = o.oracle_pct.slice(0, 3);
+  charts.push(new Chart(document.getElementById('oracle'), {
+    type:'bar',
+    data:{ labels: years, datasets:[{label:'% revision', data: pct.map(v=>v*100),
+      backgroundColor:cssv('--critical'), borderRadius:4, borderSkipped:false}]},
+    options: Object.assign(baseOpts(text,muted,grid,'% cut (latest revision)'), {
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmt(i.raw,1)+'%'}} },
+      scales:{ x:{ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{ticks:{color:muted,callback:v=>v+'%'},grid:{color:grid},border:{display:false},
+           title:{display:true,text:'% cut (latest revision)',color:muted}} }
+    })
+  }));
+  document.getElementById('oracle-take').innerHTML =
+    'In a single model revision, Oracle\'s overseas capacity forecast was cut <b>'+fmt(Math.abs(pct[0]*100),0)+'% for 2026 deepening to '+fmt(Math.abs(pct[2]*100),0)+'% for 2028</b> &mdash; the sharpest company-level delay signal in the file (on a ~1.3 GW base; Oracle\'s NA capacity, which is 8&times; larger, was not cut).';
+}
+
+function buildAll(){
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+  buildVintage(text,muted,grid);
+  buildQ1(text,muted,grid);
+  buildBalance(text,muted,grid);
+  buildQ2(text,muted,grid);
+  buildAdds(text,muted,grid);
+  buildThree(text,muted,grid);
+  buildFan(text,muted,grid);
+  buildOracle(text,muted,grid);
+}
+function rebuild(){ while(charts.length){charts.pop().destroy();} buildAll(); }
+
+document.getElementById('src-line').textContent =
+  'Sources: ' + DATA.meta.model_file + ', ' + DATA.meta.client_file + ', ' + DATA.meta.nv_file + '.';
+
+renderSourceTags();
+buildAll();
+if (window.matchMedia) {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rebuild);
+}
+</script>
+</body>
+</html>

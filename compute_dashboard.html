@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>US AI Chips &amp; Data Center Buildout</title>
+<title>AI Compute &amp; Energy Over Time</title>
 <style>
   :root {
     --page: #f9f9f7;
@@ -14,14 +14,14 @@
     --gridline: #e1e0d9;
     --baseline: #c3c2b7;
     --border: rgba(11,11,11,0.10);
-    --series-1: #2a78d6;  /* blue    */
-    --series-2: #1baf7a;  /* aqua    */
-    --series-3: #eda100;  /* yellow  */
-    --series-4: #008300;  /* green   */
-    --series-5: #eb6834;  /* orange  */
-    --series-6: #4a3aa7;  /* violet  */
-    --series-7: #e34948;  /* red     */
-    --series-8: #e87ba4;  /* magenta */
+    --series-1: #2a78d6;
+    --series-2: #1baf7a;
+    --series-3: #eda100;
+    --series-4: #008300;
+    --series-5: #eb6834;
+    --series-6: #4a3aa7;
+    --series-7: #e34948;
+    --series-8: #e87ba4;
     --critical: #d03b3b;
     --good: #0ca30c;
     --warning: #fab219;
@@ -58,7 +58,7 @@
     line-height: 1.45; -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
-  nav.pagenav { display: flex; gap: 8px; margin-bottom: 22px; }
+  nav.pagenav { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
   nav.pagenav a {
     font-size: 13px; padding: 6px 14px; border-radius: 999px; text-decoration: none;
     border: 1px solid var(--border); color: var(--text-secondary); background: var(--surface-1);
@@ -109,101 +109,76 @@
 <div class="wrap">
   <nav class="pagenav">
     <a href="dashboard.html">Supply vs Shortfall</a>
-    <a href="chips_dashboard.html" class="active">Chips &amp; Buildout</a>
-    <a href="compute_dashboard.html">Compute &amp; Energy</a>
+    <a href="chips_dashboard.html">Chips &amp; Buildout</a>
+    <a href="compute_dashboard.html" class="active">Compute &amp; Energy</a>
     <a href="synthesis_dashboard.html">Synthesis</a>
   </nav>
   <header>
-    <h1>US AI Chips &mdash; Demand, Power &amp; Data Center Buildout</h1>
-    <p class="sub">Which chips, how much power they draw, and what kind of data center capacity they land in (self-build vs leased vs neocloud).</p>
+    <h1>AI Compute &amp; Energy Over Time</h1>
+    <p class="sub">GPUs vs custom ASICs measured in compute (ExaFLOPs) and energy (TWh), and whose demand it is.</p>
     <p class="src" id="src-line"></p>
   </header>
 
   <div class="banner">
-    <b>Scope notes.</b> Chip and rack shipment data is <b>Global</b> (none of the three files splits chips by geography); buildout and tenant charts are <b>NA/US</b>.
-    "MS" = the Morgan Stanley NV server model; "Client model" = the AI-Data-Center model workbook.
-    The chip&rarr;power bridge in section B is a derived estimate with its assumptions stated on the chart.
+    <b>Scope &amp; derivation notes.</b> The source files contain <b>no ASIC FLOPs and no TWh split</b> by chip type or company &mdash; charts marked <b>DERIVED</b> are built from unit volumes &times; per-chip watts using the client's own utilization (75%) and PUE (1.5&rarr;1.28), with the client's aggregate GenAI TWh as a validation line. ASIC compute assumes <b>efficiency parity</b> (FLOPs/W) with same-year Nvidia silicon. The China / Ascend / MAIA / Other bucket is excluded throughout. All chip data is <b>Global</b>.
   </div>
 
-  <div class="section-label">A &middot; Chip demand <span class="badge">GLOBAL</span></div>
+  <div class="section-label">A &middot; Compute <span class="badge">GLOBAL</span></div>
 
   <div class="card">
-    <h2>1. AI Accelerator Shipments by Family, 2023&ndash;27</h2>
-    <p class="cap">Nvidia chip shipments by family, thousands of chips: the Hopper &rarr; Blackwell &rarr; Rubin transition. <span class="cell">(MS model, ODM share analysis rows 2&ndash;7)</span></p>
-    <div class="chart-box tall"><canvas id="chipfam"></canvas></div>
-    <p class="takeaway" id="chipfam-take"></p>
+    <h2>1. NVIDIA ExaFLOPs Sold by Generation, 2024&ndash;28</h2>
+    <p class="cap">Compute shipped per year by GPU generation, with the cumulative install line. <span class="cell">(Power Summary r81&ndash;r92)</span></p>
+    <div class="chart-box tall"><canvas id="exagen"></canvas></div>
+    <p class="takeaway" id="exagen-take"></p>
   </div>
 
   <div class="card">
-    <h2>2. The Rack-Scale Era: NVL72 Racks</h2>
-    <p class="cap">Annual rack-scale system shipments by SKU (left) and the monthly ramp (right). Actual racks. <span class="cell">(MS model, GB200-300 Tracker)</span></p>
+    <h2>2. GPU vs ASIC Compute <span class="badge">DERIVED</span></h2>
+    <p class="cap">Nvidia ExaFLOPs are sourced; ASIC ExaFLOPs are estimated at <b>efficiency parity</b> with same-year Nvidia (scaled by each side's shipped watt-base). If ASICs are less efficient than Nvidia per watt, the yellow bars shrink. <span class="cell">(r90 &times; watt-base ratio from volume rows 24&ndash;62)</span></p>
+    <div class="chart-box tall"><canvas id="gpuasicexa"></canvas></div>
+    <p class="takeaway" id="gpuasicexa-take"></p>
+  </div>
+
+  <div class="card">
+    <h2>3. The Training Wall</h2>
+    <p class="cap">Left: power available for LLM training at the client's assumed 2.25&times;/yr growth. Right: the share of <i>all</i> NVIDIA sales the top-5 US labs' training alone would consume &mdash; crossing 100% in 2028. <span class="cell">(Compute Demand r104/r111)</span></p>
     <div class="grid2">
-      <div><p class="subhead">Annual racks by SKU</p><div class="chart-box"><canvas id="racksku"></canvas></div></div>
-      <div><p class="subhead">Monthly GB-rack shipments 2025&ndash;26</p><div class="chart-box"><canvas id="rackmonthly"></canvas></div></div>
+      <div><p class="subhead">Power available for training (GW)</p><div class="chart-box"><canvas id="trainpow"></canvas></div></div>
+      <div><p class="subhead">Training share of NVDA sales (%)</p><div class="chart-box"><canvas id="trainshare"></canvas></div></div>
     </div>
-    <p class="takeaway" id="racksku-take"></p>
+    <p class="takeaway" id="train-take"></p>
+  </div>
+
+  <div class="section-label">B &middot; Energy <span class="badge">GLOBAL</span></div>
+
+  <div class="card">
+    <h2>4. Data Center Energy Trajectory, 2023&ndash;28</h2>
+    <p class="cap">Global data-center electricity: GenAI stacked on the ex-GenAI base, with US GenAI overlaid. <span class="cell">(Power Summary r10/r14/r39)</span></p>
+    <div class="chart-box tall"><canvas id="twhtraj"></canvas></div>
+    <p class="takeaway" id="twhtraj-take"></p>
   </div>
 
   <div class="card">
-    <h2>3. Nvidia GPUs vs Custom ASICs &mdash; and the Compute Gap</h2>
-    <p class="cap">Left: global unit volumes, merchant GPUs vs custom ASICs (TPU, Trainium, Meta/OpenAI/MSFT/xAI silicon), thousands &mdash; the <b>China / Ascend / MAIA / Other</b> bucket is stripped out. Right: cumulative NVIDIA ExaFLOPs sold vs the client's estimate of compute <i>needed</i>. <span class="cell">(Client file, Power Summary r43, r63 less r57; Compute Demand r40/r44)</span></p>
-    <div class="grid2">
-      <div><p class="subhead">Unit volumes (k)</p><div class="chart-box"><canvas id="gpuasic"></canvas></div></div>
-      <div><p class="subhead">Cumulative ExaFLOPs: sold vs needed</p><div class="chart-box"><canvas id="exaflops"></canvas></div></div>
-    </div>
-    <p class="takeaway" id="exa-take"></p>
+    <h2>5. GenAI TWh by Chip Class <span class="badge">DERIVED</span></h2>
+    <p class="cap">Install base (cumulative shipments, no retirement) &times; per-chip watts &times; 75% utilization &times; PUE. The dashed line is the client's own aggregate GenAI TWh &mdash; the derivation lands at <span id="val-ratio"></span> of it by 2028, so treat the split as directional. <span class="cell">(volume rows 24&ndash;62 &times; ENERGY_WATTS)</span></p>
+    <div class="chart-box tall"><canvas id="twhsplit"></canvas></div>
+    <p class="takeaway" id="twhsplit-take"></p>
   </div>
 
-  <div class="section-label">B &middot; Power per chip &amp; the bridge to data centers</div>
+  <div class="section-label">C &middot; Whose demand is it <span class="badge">GLOBAL</span></div>
 
   <div class="card">
-    <h2>4. Watts per Chip by Generation &mdash; Two Sources Compared</h2>
-    <p class="cap">Max power per GPU, client model vs Morgan Stanley. The two sources agree through VR200; they diverge on the 2027+ generation. <span class="cell">(Power Requirements per Chip; GPU Roadmap r8)</span></p>
-    <div class="chart-box tall"><canvas id="watts"></canvas></div>
-    <p class="takeaway" id="watts-take"></p>
+    <h2>6. AI Power Demand by Company, 2017&ndash;2032</h2>
+    <p class="cap">Cumulative AI critical IT power by hyperscaler, plus the non-hyperscaler remainder (neoclouds, labs, enterprises, China, sovereigns). <span class="cell">(AI Demand by Customer r223&ndash;229, r177)</span></p>
+    <div class="chart-box tall"><canvas id="bycompany"></canvas></div>
+    <p class="takeaway" id="bycompany-take"></p>
   </div>
 
   <div class="card">
-    <h2>5. Chip-Implied Power vs Data Center Buildout <span class="badge">DERIVED</span></h2>
-    <p class="cap">NVL72 racks shipped &times; measured rack draw (GB200 131.7 / GB300 146.3 / VR200 233.5 kW) &times; PUE 1.3 &rarr; GW of data center power the year's rack shipments require &mdash; against what the two models say gets built in the US. <span class="cell">Assumptions: global racks vs US-only buildout; VR300 approximated at VR200 kW; HGX/DGX 8-GPU servers excluded (understates chip demand).</span></p>
-    <div class="chart-box tall"><canvas id="bridge"></canvas></div>
-    <p class="takeaway" id="bridge-take"></p>
-  </div>
-
-  <div class="card">
-    <h2>6. US Data Center Power Trajectory <span class="badge us">US</span></h2>
-    <p class="cap">Client model: total US data center power (GW, line) and the year-over-year additions (bars), 2023&ndash;28. <span class="cell">(Power Summary Part IIB r46/r47)</span></p>
-    <div class="chart-box"><canvas id="uspower"></canvas></div>
-    <p class="takeaway" id="uspower-take"></p>
-  </div>
-
-  <div class="section-label">C &middot; What kind of data center <span class="badge us">NA / US</span></div>
-
-  <div class="card">
-    <h2>7. Self-Build vs Leasing vs Contracted Neocloud &mdash; North America</h2>
-    <p class="cap">How each hyperscaler sources its North American capacity (GW), 2025 vs 2028. <span class="cell">(Hyperscalers &amp; Neoclouds tab, deployment_type sub-rows)</span></p>
-    <div class="grid2">
-      <div><p class="subhead">2025</p><div class="chart-box short"><canvas id="sbl25"></canvas></div></div>
-      <div><p class="subhead">2028</p><div class="chart-box short"><canvas id="sbl28"></canvas></div></div>
-    </div>
-    <p class="takeaway" id="sbl-take"></p>
-  </div>
-
-  <div class="card">
-    <h2>8. Neocloud &amp; AI-Lab Capacity Ramp</h2>
-    <p class="cap">Global neocloud critical IT capacity vs the identified data-center footprints of the frontier labs (GW), 2022&ndash;2030. <span class="cell">(Hyperscalers &amp; Neoclouds B43; AI CPU Demand calculations rows 44&ndash;58)</span></p>
-    <div class="chart-box tall"><canvas id="neoramp"></canvas></div>
-    <p class="takeaway" id="neoramp-take"></p>
-  </div>
-
-  <div class="card">
-    <h2>9. Who Buys the Racks &mdash; and Who the US Capacity Serves</h2>
-    <p class="cap">Left: GB/VR rack allocations by customer segment, 2025 vs 2026 (k racks, global). Right: US Planned+UC capacity by tenant tag from the facility model &mdash; note <b>~76% is untagged</b>. <span class="cell">(MS customer blocks; NA Data Center Supply cols CZ/DB)</span></p>
-    <div class="grid2">
-      <div><p class="subhead">Rack allocations (k racks)</p><div class="chart-box"><canvas id="whobuys"></canvas></div></div>
-      <div><p class="subhead">US Planned+UC by tenant tag (GW)</p><div class="chart-box"><canvas id="tenanttag"></canvas></div></div>
-    </div>
-    <p class="takeaway" id="whobuys-take"></p>
+    <h2>7. Demand by Customer Type, 2023&ndash;26</h2>
+    <p class="cap">The model tags customer types only through 2026: hyperscalers vs leading neoclouds &amp; enterprises vs Chinese hyperscalers vs everything else. <span class="cell">(r229/r258/r290 vs r177)</span></p>
+    <div class="chart-box"><canvas id="bytype"></canvas></div>
+    <p class="takeaway" id="bytype-take"></p>
   </div>
 
   <footer>Generated by <code>build_dashboard.py</code> &middot; self-contained &middot; charts via vendored Chart.js</footer>
@@ -226,311 +201,228 @@
 </script>
 <script>
 const DATA = {"shortfall": {"demand_2026_28": 67.56128542047463, "less_under_construction": -14.850000000000001, "less_grid_access": -15.0, "shortfall_before_solutions": 37.71128542047463, "solutions": [{"name": "Nat Gas Turbines", "low": 15.0, "mid": 17.5, "high": 20.0, "prob": 0.9}, {"name": "Bloom Energy Fuel Cells", "low": 5.0, "mid": 6.5, "high": 8.0, "prob": 0.9}, {"name": "Site DC at Op'l Nuclear Plant", "low": 0.0, "mid": 2.5, "high": 5.0, "prob": 0.75}, {"name": "Convert Bitcoin Sites", "low": 10.0, "mid": 14.0, "high": 19.0, "prob": 0.9}], "weighted_solutions": {"low": 27.0, "mid": 36.525, "high": 46.05}, "net_shortfall": {"low": -10.711285420474631, "mid": -1.1862854204746327, "high": 0.0}, "shortfall_pct": {"low": 0.1585417647667868, "mid": 0.0175586567527788, "high": 0.0}}, "supply": {"n_leaf": 3124, "totals_gw": {"uc": 26.279, "planned": 202.159, "pluc": 228.382, "delta_25_28": 94.113}, "tenant_gw": {"neocloud_leased": 5.139, "hyperscaler_leased": 17.86, "ai_lab_tagged": 30.878, "other_tagged": 0.038, "untagged": 174.467}, "by_type_gw": {"hyperscaler": {"uc": 15.116, "planned": 96.662, "pluc": 111.779}, "colocation": {"uc": 11.163, "planned": 105.496, "pluc": 116.603}, "other": {"uc": 0.0, "planned": 0.0, "pluc": 0.0}}, "years": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032], "year_series_gw": {"hyperscaler": [3.143, 3.789, 5.101, 7.392, 9.581, 11.487, 13.419, 16.807, 23.49, 32.167, 47.071, 68.172, 87.658, 103.055, 113.546, 120.296], "colocation": [5.343, 5.531, 6.153, 6.864, 7.548, 8.254, 9.688, 11.951, 16.137, 25.188, 43.23, 65.568, 82.09, 95.222, 104.775, 111.541], "other": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "total": [8.485, 9.32, 11.254, 14.256, 17.13, 19.741, 23.108, 28.758, 39.627, 57.355, 90.301, 133.739, 169.748, 198.277, 218.321, 231.836]}, "top_states": [{"name": "Texas", "gw": 51.199}, {"name": "Virginia", "gw": 33.472}, {"name": "Ohio", "gw": 14.905}, {"name": "Pennsylvania", "gw": 11.921}, {"name": "Georgia", "gw": 10.749}, {"name": "Indiana", "gw": 10.506}, {"name": "Nevada", "gw": 8.185}, {"name": "Wisconsin", "gw": 7.492}, {"name": "Arizona", "gw": 6.772}, {"name": "Missouri", "gw": 6.016}], "top_companies": [{"name": "AWS", "gw": 40.973}, {"name": "Google", "gw": 24.789}, {"name": "Microsoft", "gw": 24.688}, {"name": "Meta", "gw": 15.955}, {"name": "Tract", "gw": 9.5}, {"name": "QTS", "gw": 8.342}, {"name": "Vantage Data Centers", "gw": 7.753}, {"name": "Lancium", "gw": 5.021}, {"name": "STACK Infrastructure", "gw": 4.746}, {"name": "Aligned Data Centers", "gw": 3.919}]}, "reconciliation": {"needed_shortfall": 37.71128542047463, "client_uc": 14.850000000000001, "model_us_uc": 26.279, "client_demand": 67.56128542047463, "model_us_additions_26_28": 94.113, "model_us_planned": 202.159, "model_us_pluc": 228.382, "residual_pluc_vs_needed": 190.67, "coverage_ratio_pluc": 6.06, "coverage_ratio_additions": 1.39}, "chips": {"nv": {"chip_years": [2023, 2024, 2025, 2026, 2027], "chip_families": [{"name": "A100", "values": [265.4, 0.0, 0.0, 0.0, 0.0]}, {"name": "H100/200", "values": [1249.3, 3842.6, 560.9, 0.0, 0.0]}, {"name": "B200/300", "values": [0.0, 363.2, 4279.8, 3498.0, 0.0]}, {"name": "R100/200", "values": [0.0, 0.0, 0.0, 2262.3, 3620.2]}, {"name": "X100", "values": [0.0, 0.0, 0.0, 54.6, 1810.0]}, {"name": "Others", "values": [267.6, 958.0, 446.5, 864.2, 950.5]}], "customers": {"2025": [{"name": "Microsoft", "kracks": 5.8}, {"name": "Oracle", "kracks": 7.775}, {"name": "Google", "kracks": 1.777}, {"name": "Amazon", "kracks": 0.944}, {"name": "Meta Platforms", "kracks": 3.103}, {"name": "Coreweave", "kracks": 2.4}, {"name": "Tesla/X", "kracks": 3.4}, {"name": "Nebius", "kracks": 0.42}, {"name": "MegaSpeed", "kracks": 0.17}, {"name": "Lambda", "kracks": 0.1}, {"name": "TogetherAI", "kracks": 0.0}, {"name": "Others", "kracks": 3.029}], "2026": [{"name": "Microsoft", "kracks": 18.0}, {"name": "Oracle", "kracks": 11.2}, {"name": "Google", "kracks": 3.2}, {"name": "Amazon", "kracks": 9.2}, {"name": "Meta Platforms", "kracks": 4.8}, {"name": "Coreweave", "kracks": 4.5}, {"name": "Tesla/X", "kracks": 7.0}, {"name": "Nebius", "kracks": 2.5}, {"name": "MegaSpeed", "kracks": 0.0}, {"name": "Lambda", "kracks": 1.3}, {"name": "TogetherAI", "kracks": 1.5}, {"name": "Others", "kracks": 14.175}], "total_2025": 28.918, "total_2026": 77.375}, "months": ["Jan '25", "Feb '25", "Mar '25", "Apr '25", "May '25", "Jun '25", "Jul '25", "Aug '25", "Sep '25", "Oct '25", "Nov '25", "Dec '25", "Jan '26", "Feb '26", "Mar '26", "Apr '26", "May-E '26", "Jun-E '26", "Jul-E '26", "Aug-E '26", "Sep-E '26", "Oct-E '26", "Nov-E '26", "Dec-E '26"], "monthly_racks": [127.0, 283.0, 498.0, 692.0, 1759.0, 1845.0, 1740.0, 2359.0, 4165.0, 4175.0, 5390.0, 5885.0, 5945.0, 6330.0, 8500.0, 8275.0, 8250.0, 8400.0, 7100.0, 6300.0, 5000.0, 4300.0, 4500.0, 4475.0], "rack_years": [2025, 2026, 2027], "rack_by_sku": [{"name": "GB200 NVL72", "values": [24218.0, 1115.0, 0.0]}, {"name": "GB300 NVL72", "values": [4700.0, 73260.0, 7197.0]}, {"name": "VR200 NVL72", "values": [0.0, 3000.0, 89097.0]}, {"name": "VR300", "values": [0.0, 0.0, 3000.0]}], "rack_totals": [28918.0, 77375.0, 99294.0], "ms_tdp": [{"sku": "A100", "watts": 400.0}, {"sku": "H100", "watts": 700.0}, {"sku": "H200", "watts": 700.0}, {"sku": "B200", "watts": 1000.0}, {"sku": "GB200 NVL72", "watts": 1200.0}, {"sku": "MGX GB300A", "watts": 700.0}, {"sku": "GB300 NVL72", "watts": 1400.0}, {"sku": "VR200 NVL144", "watts": 2300.0}, {"sku": "VR200 NVL144 CPX", "watts": 800.0}, {"sku": "VR300", "watts": 3600.0}], "rack_kw": {"GB200 NVL72": 131.67, "GB300 NVL72": 146.34, "VR200 NVL72": 233.52}}, "client": {"years": [2023, 2024, 2025, 2026, 2027, 2028], "total_gpus": [1793.9, 5183.6, 5854.4, 7801.0, 8067.0, 9701.0], "total_asics": [1393.0, 3760.0, 4976.0, 8284.0, 11784.0, 13442.0], "total_asics_ex_china": [1393.0, 3280.0, 3173.0, 6211.0, 9400.0, 10700.0], "asics_china_ascend_other": [0.0, 480.0, 1803.0, 2073.0, 2384.0, 2742.0], "us_power_gw": [33.6, 40.7, 51.9, 68.2, 90.7, 119.4], "us_additions_gw": [0.0, 7.1, 11.1, 16.4, 22.5, 28.7], "twh_genai_global": [27.2, 72.1, 163.0, 311.5, 524.0, 801.6], "twh_base_global": [341.0, 375.1, 412.6, 453.9, 499.3, 549.2], "twh_genai_us": [16.3, 42.4, 93.1, 175.9, 296.3, 455.1], "global_dc_gw": [56.0, 68.1, 87.6, 116.5, 155.7, 205.6], "pue": [1.5, 1.45, 1.4, 1.35, 1.3, 1.28], "utilization": 0.75, "gpu_vol_rows": [{"row": 24, "label": "Total H100 GPU Volume (k units)", "values": [1078.0, 3114.0, 768.0, 0.0, 0.0, 0.0]}, {"row": 25, "label": "Total A100 GPU Volume (k units)", "values": [296.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 26, "label": "Total B100 GPU Volume (k units)", "values": [0.0, 242.0, 4096.0, 6854.0, 1366.0, 0.0]}, {"row": 27, "label": "Total R100 GPU Volume (Rubin) (k units)", "values": [0.0, 0.0, 0.0, 502.0, 6034.0, 5818.7]}, {"row": 28, "label": "Total R100 + 1 GPU Volume (Rubin Ultra) (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 2909.3]}, {"row": 29, "label": "Total R100 + 2 GPU Volume (Feynman) (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 39.0]}, {"row": 30, "label": "Total R100 + 3  (Unnamed) GPU Volume (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 31, "label": "Total Other NVDA GPU (k units)", "values": [268.0, 1404.0, 590.0, 0.0, 0.0, 0.0]}, {"row": 32, "label": "Total AMD Other (k units)", "values": [93.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 33, "label": "Total MI300 (k units)", "values": [0.0, 404.4, 112.0, 0.0, 0.0, 0.0]}, {"row": 34, "label": "Total MI325 (k units)", "values": [0.0, 0.0, 152.0, 0.0, 0.0, 0.0]}, {"row": 35, "label": "Total MI350 (k units)", "values": [0.0, 0.0, 130.0, 234.0, 0.0, 0.0]}, {"row": 36, "label": "Total MI400 (k units)", "values": [0.0, 0.0, 0.0, 211.0, 657.0, 563.0]}, {"row": 37, "label": "Total MI400 +1 (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 346.0]}, {"row": 38, "label": "Total MI400 +2 (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 39, "label": "Total Gaudi 2 (k units)", "values": [58.9, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 40, "label": "Total Gaudi 3 (k units)", "values": [0.0, 19.2, 6.4, 0.0, 0.0, 0.0]}, {"row": 41, "label": "Total Falcon Shores (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 42, "label": "Total Future Intel GPU (k units)", "values": [0.0, 0.0, 0.0, 0.0, 10.0, 25.0]}], "asic_vol_rows": [{"row": 45, "label": "Total TPU before v5 (k units)", "values": [1093.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 46, "label": "Total TPU v5p (k units)", "values": [0.0, 850.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 47, "label": "Total TPU v5e (k units)", "values": [0.0, 1530.0, 250.0, 0.0, 0.0, 0.0]}, {"row": 48, "label": "Total TPU v6 p/e (k units)", "values": [0.0, 0.0, 1200.0, 0.0, 0.0, 0.0]}, {"row": 49, "label": "v7 (Ironwood, by Broadcom) (k units)", "values": [0.0, 0.0, 300.0, 3280.0, 3500.0, 3500.0]}, {"row": 50, "label": "v8 (N; 3nm, by MediaTek) (k units)", "values": [0.0, 0.0, 0.0, 600.0, 2500.0, 2500.0]}, {"row": 51, "label": "N+1 (2nm) and N+2 (2nm) (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 1000.0]}, {"row": 52, "label": "Total Trainium 2 (k units)", "values": [0.0, 300.0, 1200.0, 320.0, 0.0, 0.0]}, {"row": 53, "label": "Total Inferentia 2 (k units)", "values": [300.0, 600.0, 30.0, 0.0, 0.0, 0.0]}, {"row": 54, "label": "Total Trainium/Inferentia 2+1 (k units)", "values": [0.0, 0.0, 85.0, 1360.0, 1500.0, 250.0]}, {"row": 55, "label": "Total Trainium/Inferentia 2+2 (k units)", "values": [0.0, 0.0, 0.0, 0.0, 100.0, 1300.0]}, {"row": 56, "label": "Total Trainium/Inferentia 2+3 (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 58, "label": "Total ByteDance (k units)", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"row": 59, "label": "Total Meta (k units)", "values": [0.0, 0.0, 50.0, 150.0, 500.0, 600.0]}, {"row": 60, "label": "Total Open AI (k units)", "values": [0.0, 0.0, 0.0, 130.0, 500.0, 600.0]}, {"row": 61, "label": "Total MSFT (k units)", "values": [0.0, 0.0, 58.0, 171.0, 500.0, 500.0]}, {"row": 62, "label": "xAI", "values": [0.0, 0.0, 0.0, 200.0, 300.0, 450.0]}], "exa_gen_years": [2024, 2025, 2026, 2027, 2028], "exa_by_gen": [{"name": "Hopper", "values": [12325.2, 3039.7, 0.0, 0.0, 0.0]}, {"name": "Blackwell", "values": [2394.6, 40529.9, 67820.3, 13516.6, 0.0]}, {"name": "Rubin", "values": [0.0, 0.0, 17385.5, 208972.5, 201515.0]}, {"name": "Rubin +1", "values": [0.0, 0.0, 0.0, 0.0, 352651.2]}, {"name": "Rubin +2", "values": [0.0, 0.0, 0.0, 0.0, 16566.9]}], "exa_total": [14719.8, 43569.7, 85205.8, 222489.1, 570733.1], "exa_years": [2026, 2027, 2028], "exa_cumulative": [143495.3, 365984.4, 936717.5], "exa_needed": [174278.7, 697114.6, 2788458.5], "exa_shortage": [89072.8, 474625.5, 2217725.4], "exa_shortage_pct": [1.0454, 2.1333, 3.8857], "training_years": [2026, 2027, 2028, 2029, 2030], "training_power_mw": [5000.0, 16250.0, 52812.5, 171640.6, 557832.0], "training_share_years": [2026, 2027, 2028], "training_share": [0.3032, 0.3773, 1.3228], "bw_equiv_sold": [8611000.0, 22485000.0, 20843695.8]}, "model_watts": [{"sku": "Nvidia - A100", "watts": 400.0}, {"sku": "Nvidia - A800", "watts": 400.0}, {"sku": "Nvidia - H100 PCIe", "watts": 350.0}, {"sku": "Nvidia - H100 SXM", "watts": 700.0}, {"sku": "Nvidia - H800", "watts": 700.0}, {"sku": "Nvidia - H200", "watts": 700.0}, {"sku": "Nvidia - H20", "watts": 400.0}, {"sku": "Nvidia - H20E", "watts": 400.0}, {"sku": "Nvidia - B100", "watts": 700.0}, {"sku": "B200 1000W", "watts": 1000.0}, {"sku": "GB200 NVL36", "watts": 1200.0}, {"sku": "GB200 NVL72", "watts": 1200.0}, {"sku": "GB200 Ariel NVL36", "watts": 1200.0}, {"sku": "B300 1200W", "watts": 1200.0}, {"sku": "GB300 NVL72", "watts": 1400.0}, {"sku": "Nvidia - B300A PCIe", "watts": 700.0}, {"sku": "Nvidia - RTX Pro 6000 Blackwell Server Edition", "watts": 600.0}, {"sku": "Nvidia - B30A (Blackwell single die CoWoS-L)", "watts": 600.0}, {"sku": "R200 HGX", "watts": 2300.0}, {"sku": "VR200 NVL144 (Regular)", "watts": 2300.0}, {"sku": "VR200 NVL144 CPX", "watts": 3100.0}, {"sku": "VR200 NVL144 CPX (Dual Rack)", "watts": 2500.0}, {"sku": "R300 16-Hi (1024GB)", "watts": 4600.0}, {"sku": "R300 8-Hi (512GB)", "watts": 4600.0}, {"sku": "Rubin CPX (VR200 NVL144 CPX)", "watts": 800.0}, {"sku": "Rubin CPX (VR CPX Dual Rack) for VR200 NVL144", "watts": 2300.0}, {"sku": "Nvidia - F200", "watts": 7000.0}, {"sku": "TPU v4 (Pufferfish)", "watts": 200.0}, {"sku": "TPU v4i (Pufferlite)", "watts": 175.0}, {"sku": "TPU v5p (Viperfish)", "watts": 550.0}, {"sku": "TPU v5e (Viperlite)", "watts": 300.0}, {"sku": "TPU v6 (Ghostlite)", "watts": 390.0}, {"sku": "Google - TPU v7 (Ironwood)", "watts": 980.0}, {"sku": "Anthropic - TPU v7 (Ironwood)", "watts": 980.0}, {"sku": "TPU v8AX (Sunfish)", "watts": 1200.0}, {"sku": "TPU v9 (Pumafish)", "watts": 1500.0}, {"sku": "MTIA Gen 2 (Artemis) - HBM test", "watts": 400.0}, {"sku": "MTIA Gen 2 (Artemis)", "watts": 90.0}, {"sku": "MTIA Gen 3 (Athena / Minerva)", "watts": 1000.0}, {"sku": "MTIA Gen 4 (Iris+ / Santa Barbara)", "watts": 1100.0}, {"sku": "MTIA Gen 4 (Arke / Santa Barbara)", "watts": 1300.0}, {"sku": "MTIA Gen 5 (Olympus / Santa Cruz)", "watts": 1600.0}, {"sku": "Bytedance Custom ASIC Gen 1", "watts": 90.0}, {"sku": "Bytedance Custom ASIC Gen 2", "watts": 90.0}, {"sku": "OAI Titan 1", "watts": 1400.0}, {"sku": "OAI Titan 2", "watts": 2200.0}, {"sku": "Softbank Izanagi 1", "watts": 600.0}, {"sku": "Softbank Izanagi 2", "watts": 800.0}, {"sku": "TPUv8X (Zebrafish)", "watts": 600.0}, {"sku": "AWS Inferentia2 / Trainium1", "watts": 200.0}, {"sku": "Trainium3 Teton PD", "watts": 570.0}, {"sku": "Trainium3 Teton PD Ultra", "watts": 570.0}, {"sku": "Trainium3 Teton PDS", "watts": 570.0}, {"sku": "Trainium3 Teton Max", "watts": 570.0}, {"sku": "AWS Trainium4 (UALink)", "watts": 1200.0}, {"sku": "AWS Trainium4 (NVLink)", "watts": 1200.0}, {"sku": "Intel Habana Gaudi2", "watts": 600.0}, {"sku": "Intel Habana Gaudi3", "watts": 900.0}, {"sku": "Intel - Habana Gaudi2", "watts": 600.0}, {"sku": "Intel - Habana Gaudi3", "watts": 900.0}, {"sku": "Intel - Falcon Shores", "watts": 1200.0}, {"sku": "Trainium2 Teton PD", "watts": 500.0}, {"sku": "Trainium2 Teton PD Ultra", "watts": 500.0}, {"sku": "Trainium2 Teton PDS", "watts": 500.0}, {"sku": "Trainium2e Teton PD", "watts": 500.0}, {"sku": "Trainium2e Teton PD Ultra", "watts": 500.0}, {"sku": "Trainium2e Teton PDS", "watts": 500.0}, {"sku": "AWS Inferentia3", "watts": 350.0}, {"sku": "AWS Trainium4 - Custom HBM & Advanced Packaging Design", "watts": 1200.0}, {"sku": "Microsoft Maia 300 (Griffin)", "watts": 1000.0}, {"sku": "Microsoft Maia 400 (Glenwood)", "watts": 1200.0}, {"sku": "Groq LPU v1", "watts": 300.0}, {"sku": "Microsoft Maia 300 (Clea)", "watts": 1000.0}, {"sku": "AMD - MI300X", "watts": 750.0}, {"sku": "AMD - MI325X", "watts": 1000.0}, {"sku": "AMD - MI308X", "watts": 750.0}, {"sku": "AMD - MI300A", "watts": 400.0}, {"sku": "AMD - MI350", "watts": 1400.0}, {"sku": "AMD - MI400", "watts": 2500.0}, {"sku": "AMD - MI500", "watts": 2600.0}, {"sku": "Apple - Baltra Sotra", "watts": 700.0}, {"sku": "Alphawave - Etched Sohu (Dragonfly)", "watts": 1000.0}, {"sku": "Microsoft Maia 100 (Athena)", "watts": 750.0}, {"sku": "Microsoft Maia 200 (Braga/Normandy)", "watts": 860.0}, {"sku": "Furiosa RNGD", "watts": 150.0}, {"sku": "Iluvatar CoreX - Tiangai200", "watts": 200.0}, {"sku": "Huawei - Ascend 910B", "watts": 400.0}, {"sku": "Huawei - Ascend 910C", "watts": 750.0}, {"sku": "Huawei - Ascend 910D", "watts": 550.0}, {"sku": "Huawei - Ascend 950PR", "watts": 600.0}, {"sku": "Huawei - Ascend 950DT", "watts": 1100.0}, {"sku": "Huawei - Ascend 960", "watts": 1500.0}, {"sku": "Huawei - Ascend 970", "watts": 1500.0}, {"sku": "Cambricon - Siyuan 590", "watts": 500.0}, {"sku": "Cambricon - Siyuan 690", "watts": 600.0}, {"sku": "Rubin CPX (VR CPX Dual Rack) for VR300 NVL576", "watts": 3217.0}], "watts_compare": [{"gen": "A100", "client": 400.0, "ms": 400.0}, {"gen": "H100 (SXM)", "client": 700.0, "ms": 700.0}, {"gen": "B200", "client": 1000.0, "ms": 1000.0}, {"gen": "GB200 NVL72", "client": 1200.0, "ms": 1200.0}, {"gen": "GB300 NVL72", "client": 1400.0, "ms": 1400.0}, {"gen": "VR200 NVL144", "client": 2300.0, "ms": 2300.0}, {"gen": "VR300 / R300", "client": 4600.0, "ms": 3600.0}, {"gen": "F200", "client": 7000.0, "ms": null}], "buildout": {"years": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032], "hyperscalers": [{"name": "Microsoft", "total": [1921.7, 2198.0, 2665.6, 3507.2, 4277.3, 5340.0, 6607.7, 8810.4, 12710.8, 17642.4, 23999.6, 31390.3, 36674.7, 40813.8, 44438.2, 47034.2], "sub": {"Self-build - North America": [593.9, 729.5, 999.8, 1392.6, 1847.6, 2313.0, 2746.0, 3461.6, 4485.1, 5652.1, 7849.2, 13267.3, 17787.8, 21222.5, 24255.2, 26437.2], "Leasing - North America": [798.8, 825.2, 907.7, 1039.5, 1129.4, 1227.4, 1585.8, 2023.0, 3425.6, 4881.8, 5427.4, 5512.9, 5512.9, 5512.9, 5512.9, 5512.9], "Self-build - Overseas": [156.8, 211.4, 211.4, 357.7, 405.7, 675.0, 876.7, 1380.9, 2002.4, 2841.7, 4602.6, 5423.3, 6003.8, 6524.9, 6933.2, 7164.0], "Leasing - Overseas": [372.2, 431.9, 546.8, 717.3, 894.6, 1124.6, 1373.2, 1708.6, 2304.1, 3260.6, 4048.9, 4277.4, 4277.4, 4277.4, 4277.4, 4277.4], "Contracted Neocloud capacity": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 26.0, 236.3, 493.7, 1006.3, 2071.6, 2909.4, 3092.8, 3276.1, 3459.4, 3642.8]}}, {"name": "Meta", "total": [898.6, 1074.6, 1346.6, 1714.5, 2303.5, 2882.9, 3645.0, 4180.5, 5426.5, 8652.2, 13014.7, 17748.5, 21766.4, 24859.4, 26696.0, 27844.0], "sub": {"Self-build - North America": [279.6, 399.6, 579.6, 867.8, 1291.2, 1737.9, 2216.3, 2608.6, 3633.0, 5191.8, 7599.4, 11301.6, 14781.7, 17479.4, 18795.1, 19554.9], "Leasing - North America": [534.6, 553.4, 612.3, 680.7, 744.9, 814.8, 957.5, 1094.6, 1276.9, 2054.6, 3377.0, 4017.9, 4296.4, 4456.4, 4694.0, 4982.2], "Self-build - Overseas": [46.8, 78.8, 102.8, 102.8, 192.8, 240.8, 368.2, 368.2, 368.2, 368.2, 423.5, 634.2, 797.5, 960.9, 1244.2, 1344.2], "Leasing - Overseas": [37.6, 42.8, 51.9, 63.2, 74.6, 89.4, 103.0, 109.1, 115.0, 122.6, 143.8, 143.8, 143.8, 143.8, 143.8, 143.8], "Contracted Neocloud capacity": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 33.3, 915.0, 1471.0, 1651.0, 1747.0, 1819.0, 1819.0, 1819.0]}}, {"name": "Google", "total": [1590.9, 1717.0, 2304.2, 3337.8, 3955.5, 4497.9, 4910.9, 5979.4, 8206.4, 11582.9, 17720.7, 25158.6, 31790.0, 36478.6, 39340.4, 40850.7], "sub": {"Self-build - North America": [738.9, 775.0, 1304.9, 2223.3, 2541.2, 2727.3, 2951.3, 3555.9, 5014.9, 6906.8, 11167.3, 15892.6, 20230.7, 23984.0, 26289.6, 27599.8], "Leasing - North America": [149.9, 155.1, 171.6, 200.8, 218.8, 238.4, 291.1, 489.4, 652.0, 1419.7, 2032.1, 2507.8, 2622.5, 2737.2, 2851.8, 2851.8], "Self-build - Overseas": [538.4, 592.4, 592.4, 630.8, 854.5, 1113.1, 1191.6, 1355.6, 1779.7, 2194.4, 3264.6, 5151.2, 6790.0, 7536.2, 7977.6, 8177.6], "Leasing - Overseas": [163.8, 194.5, 235.3, 282.9, 341.0, 419.0, 476.8, 578.6, 759.8, 1062.1, 1256.7, 1606.9, 2146.8, 2221.3, 2221.3, 2221.4]}}, {"name": "AWS", "total": [2527.7, 3102.6, 3774.8, 4928.9, 6464.5, 8014.8, 9645.0, 12131.7, 16000.4, 21295.9, 28993.4, 36992.2, 44332.6, 49836.6, 53541.8, 55999.4], "sub": {"Self-build - North America": [1235.5, 1595.2, 1909.1, 2600.9, 3593.8, 4401.6, 5180.2, 6635.7, 9325.9, 12557.0, 17376.6, 23868.2, 30655.9, 36013.2, 39682.3, 42137.4], "Leasing - North America": [661.6, 684.9, 757.8, 842.5, 922.0, 1008.5, 1164.2, 1447.8, 1831.8, 2768.4, 3651.2, 3694.3, 3694.3, 3694.3, 3694.3, 3694.3], "Self-build - Overseas": [112.0, 211.7, 335.8, 473.3, 760.3, 1157.0, 1636.7, 2008.8, 2515.9, 2906.6, 4041.1, 4944.6, 5481.7, 5625.9, 5659.3, 5659.3], "Leasing - Overseas": [518.5, 610.7, 772.1, 1012.1, 1188.4, 1447.7, 1663.9, 2039.4, 2326.7, 3064.0, 3924.4, 4485.2, 4500.7, 4503.3, 4505.9, 4508.4]}}, {"name": "Oracle", "total": [233.1, 263.6, 325.6, 418.4, 528.4, 677.0, 914.1, 1110.9, 1784.5, 3065.7, 6057.4, 9845.7, 11240.6, 12260.4, 12960.1, 13336.7], "sub": {"Self-build - North America": [49.0, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7, 43.7], "Leasing - North America": [130.4, 158.1, 206.7, 273.5, 358.5, 472.6, 664.4, 786.2, 1255.9, 2348.7, 4933.0, 8473.9, 9859.9, 10870.9, 11561.7, 11931.7], "Self-build - Overseas": [20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 26.7, 35.6, 44.4, 53.3, 60.0], "Leasing - Overseas": [33.7, 41.8, 55.2, 81.2, 106.1, 140.7, 186.0, 261.0, 464.9, 653.3, 1060.7, 1301.4, 1301.4, 1301.4, 1301.4, 1301.4]}}], "neoclouds": [{"name": "Coreweave", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 18.0, 69.0, 362.3, 842.9, 1816.1, 3050.9, 3869.6, 3989.6, 4009.6, 4009.6, 4009.6], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 133.3, 200.0, 200.0, 200.0, 200.0, 200.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 18.0, 69.0, 309.3, 761.9, 1687.1, 2748.6, 3500.6, 3620.6, 3640.6, 3640.6, 3640.6], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 53.0, 81.0, 129.0, 169.0, 169.0, 169.0, 169.0, 169.0, 169.0]}}, {"name": "Nebius", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 29.9, 97.9, 468.6, 994.1, 1492.5, 1661.0, 1829.4, 1997.8, 2039.9], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 204.2, 452.6, 621.1, 789.5, 957.9, 1000.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 25.0, 228.7, 312.0, 312.0, 312.0, 312.0, 312.0, 312.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 25.0, 50.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.9, 22.9, 164.9, 402.9, 652.9, 652.9, 652.9, 652.9, 652.9]}}, {"name": "Nscale", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 14.0, 74.0, 164.0, 1213.5, 2378.1, 2643.5, 2804.0, 2804.0, 2804.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 675.0, 1350.0, 1350.0, 1350.0, 1350.0, 1350.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0, 157.0, 274.0, 274.0, 274.0, 274.0, 274.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 60.0, 80.0, 325.0, 660.1, 925.5, 1086.0, 1086.0, 1086.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 14.0, 14.0, 44.0, 56.5, 94.0, 94.0, 94.0, 94.0, 94.0]}}, {"name": "Fluidstack", "total": [4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 51.5, 401.0, 949.0, 979.0, 979.0, 979.0, 979.0, 979.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 330.0, 867.0, 897.0, 897.0, 897.0, 897.0, 897.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 51.5, 71.0, 82.0, 82.0, 82.0, 82.0, 82.0, 82.0]}}, {"name": "IREN Cloud", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 225.0, 225.0, 225.0, 225.0, 225.0, 225.0, 225.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 15.0, 225.0, 225.0, 225.0, 225.0, 225.0, 225.0, 225.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}}, {"name": "Lambda", "total": [4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 32.6, 58.0, 279.5, 309.5, 309.5, 309.5, 309.5, 309.5, 309.5], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 4.5, 26.6, 52.0, 223.5, 253.5, 253.5, 253.5, 253.5, 253.5, 253.5], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0, 6.0, 56.0, 56.0, 56.0, 56.0, 56.0, 56.0, 56.0]}}, {"name": "TensorWave", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 14.4, 34.4, 234.4, 234.4, 234.4, 234.4, 234.4, 234.4], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 14.4, 34.4, 234.4, 234.4, 234.4, 234.4, 234.4, 234.4], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}}, {"name": "Crusoe Cloud", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 45.3, 87.0, 132.0, 312.0, 615.0, 914.0, 1037.0, 1037.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.3, 45.0, 90.0, 270.0, 573.0, 872.0, 995.0, 995.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 42.0, 42.0, 42.0, 42.0, 42.0, 42.0, 42.0, 42.0]}}, {"name": "Vultr", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}}, {"name": "TogetherAI", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 22.0, 54.0, 54.0, 89.0, 89.0, 89.0, 89.0, 89.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 22.0, 54.0, 54.0, 89.0, 89.0, 89.0, 89.0, 89.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}}, {"name": "SharonAI", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 58.0, 58.0, 58.0, 58.0, 58.0, 58.0, 58.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 58.0, 58.0, 58.0, 58.0, 58.0, 58.0, 58.0]}}, {"name": "Firmus", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 70.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 30.0, 60.0, 60.0, 60.0, 60.0, 60.0, 60.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0]}}, {"name": "Cerebras", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.5, 19.5, 35.5, 204.5, 311.5, 311.5, 311.5, 311.5, 311.5], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.5, 19.5, 35.5, 139.5, 171.5, 171.5, 171.5, 171.5, 171.5], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 25.0, 100.0, 100.0, 100.0, 100.0, 100.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0, 40.0, 40.0, 40.0, 40.0, 40.0]}}, {"name": "Voltage Park", "total": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 31.0, 31.0, 31.0, 43.0, 43.0, 43.0, 43.0, 43.0, 43.0, 43.0], "sub": {"Self-build - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - North America": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 31.0, 31.0, 31.0, 43.0, 43.0, 43.0, 43.0, 43.0, 43.0, 43.0], "Self-build - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "Leasing - Overseas": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}}], "global_neocloud": [9.0, 9.0, 9.0, 9.0, 9.0, 27.0, 109.0, 478.8, 1271.5, 3786.1, 7617.9, 10451.6, 11308.5, 11956.4, 12247.8, 12289.9], "ai_labs": [{"name": "OpenAI", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 118.0, 228.0, 655.0, 2096.8, 4569.5, 9617.6, 14703.0, 16024.5, 16436.0, 16436.0, 16436.0]}, {"name": "Anthropic", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 31.6, 170.0, 285.0, 1522.0, 4268.2, 7759.5, 8948.3, 9319.9, 9319.9, 9319.9, 9319.9]}, {"name": "xAI", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 47.8, 57.8, 240.8, 776.8, 1668.5, 2335.1, 2621.8, 2781.8, 2901.8, 2901.8, 2901.8]}, {"name": "Meta Superintelligence", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 150.0, 150.0, 225.0, 795.9, 2394.9, 4928.9, 6621.3, 7793.7, 8524.5, 8524.5, 8524.5]}, {"name": "Google DeepMind", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 176.4, 348.4, 692.4, 1695.3, 2920.2, 6258.9, 9838.4, 13044.8, 14540.7, 14540.7, 14540.7]}]}, "bridge": {"years": [2025, 2026, 2027], "pue": 1.3, "rack_kw": {"GB200 NVL72": 131.67, "GB300 NVL72": 146.34, "VR200 NVL72": 233.52, "VR300": 233.52}, "implied_gw": [5.04, 15.04, 29.33], "client_us_additions_gw": [11.1, 16.4, 22.5], "model_us_additions_gw": [10.87, 17.73, 32.95]}}, "compute": {"energy_split": {"years": [2023, 2024, 2025, 2026, 2027, 2028], "gpu_twh": [10.7, 43.2, 90.9, 166.3, 304.5, 522.3], "asic_twh": [2.7, 14.1, 28.3, 76.7, 155.2, 255.1], "derived_total_twh": [13.4, 57.3, 119.2, 243.0, 459.7, 777.4], "client_total_twh": [27.2, 72.1, 163.0, 311.5, 524.0, 801.6], "validation_ratio": [0.49, 0.79, 0.73, 0.78, 0.88, 0.97], "utilization": 0.75, "pue": [1.5, 1.45, 1.4, 1.35, 1.3, 1.28]}, "compute_split": {"years": [2024, 2025, 2026, 2027, 2028], "nv_exa": [14719.8, 43569.7, 85205.8, 222489.1, 570733.1], "asic_exa_parity": [5638.1, 14119.9, 59347.0, 139032.0, 287465.9]}, "customer": {"years": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032], "total_units_k": [0.0, 32.9, 88.7, 223.3, 595.6, 863.2, 2302.3, 7693.5, 10434.7, 12294.8, 20190.9, 21099.4, 21479.2, 21672.5, 21867.6, 22064.4], "install_base_k": [0.0, 32.9, 121.6, 345.0, 940.6, 1803.8, 4106.1, 11766.7, 22112.6, 34184.1, 53779.3, 74283.2, 94899.2, 114269.4, 128443.5, 140073.3], "ai_power_mw": [50.0, 79.7, 159.7, 361.2, 861.0, 1537.1, 3413.9, 10490.4, 21164.0, 38663.2, 72540.0, 110409.6, 146174.7, 179473.7, 206937.6, 219124.3], "hyperscaler_ai_mw": [26.5, 42.3, 84.7, 191.6, 456.7, 815.2, 1810.6, 5893.1, 11911.3, 24210.1, 45841.4, 62806.5, 82104.7, 100236.3, 118951.3, 137374.6], "companies": [{"name": "Microsoft", "values": [5.4, 8.6, 17.2, 38.8, 92.6, 165.3, 367.2, 1245.3, 2528.5, 4368.1, 8576.1, 11599.8, 15215.7, 18535.5, 22003.3, 25397.1]}, {"name": "Meta", "values": [3.4, 5.5, 11.0, 24.9, 59.4, 106.0, 235.4, 859.7, 1545.9, 3799.7, 8524.5, 12013.8, 16120.8, 19919.0, 23871.6, 27746.9]}, {"name": "Google", "values": [10.5, 16.7, 33.6, 75.9, 180.9, 322.9, 717.2, 2291.6, 4164.2, 6885.7, 13054.0, 17498.9, 22805.5, 27681.3, 32772.5, 37755.9]}, {"name": "Amazon", "values": [5.4, 8.7, 17.4, 39.3, 93.6, 167.1, 371.1, 1172.9, 2762.9, 5380.6, 8338.4, 11126.1, 13998.9, 16829.2, 19680.7, 22521.6]}, {"name": "Oracle", "values": [1.6, 2.5, 5.0, 11.2, 26.7, 47.7, 106.0, 309.9, 896.1, 3693.7, 7151.0, 10278.4, 13570.8, 16780.7, 20031.8, 23262.3]}, {"name": "Apple", "values": [0.2, 0.3, 0.6, 1.4, 3.4, 6.2, 13.7, 13.7, 13.7, 82.3, 197.5, 289.5, 393.0, 490.8, 591.4, 690.6]}], "type_years": [2023, 2024, 2025, 2026], "type_hyperscaler": [1810.6, 5893.1, 11911.3, 24210.1], "type_neoclouds": [74.5, 587.4, 1473.3, 3366.3], "type_china": [558.4, 1559.8, 3413.0, 4809.4], "type_total": [3413.9, 10490.4, 21164.0, 38663.2], "neo_coreweave": [45.2, 333.4, 802.9, 1593.3], "neo_tesla": [29.3, 117.3, 177.1, 197.7], "neo_xai": [0.0, 136.6, 493.2, 1575.3]}}, "synthesis": {"unconstrained": {"years": [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030], "ai_power_mw": [0.0, 5.0, 15.0, 50.0, 79.7, 159.7, 361.2, 765.6, 1362.9, 3498.6, 11151.9, 24384.4, 44483.1, 83153.6, 126406.8, 167780.0, 204935.6], "total_units_k": [0.0, 0.0, 0.0, 0.0, 32.9, 88.7, 223.3, 626.5, 863.1, 2707.9, 8242.1, 11457.4, 14330.0, 22945.3, 24092.5, 24574.4, 24820.1]}, "balance": {"years": [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030], "incr_demand_mw": [0.0, 747.3, 1608.0, 2348.4, 2408.7, 2447.4, 2931.4, 5497.1, 7437.6, 13073.1, 20484.2, 17509.8, 19902.1, 20089.0], "capacity_added_mw": [0.0, 750.8, 1617.5, 2684.0, 2536.9, 2306.2, 2858.3, 4394.2, 8807.2, 12888.7, 19649.1, 25220.8, 20959.6, 16528.5], "surplus_deficit_mw": [0.0, 3.5, 9.5, 335.6, 128.2, -141.2, -73.2, -1102.9, 1369.6, -184.4, -835.1, 7711.0, 1057.5, -3560.5], "cum_surplus_deficit_mw": [0.0, 0.0, 0.0, 311.7, 380.7, 159.5, -118.9, -1776.5, -1219.4, -2925.4, -6384.0, -689.0, -1893.4, -7579.1], "total_demand_mw": [5510.1, 6261.0, 7878.4, 10250.7, 12718.6, 15246.0, 18382.6, 24434.4, 32684.5, 47279.2, 70386.9, 89912.8, 112076.8, 134291.0], "total_capacity_mw": [5510.1, 6261.0, 7878.4, 10562.4, 13099.3, 15405.5, 18263.7, 22657.9, 31465.1, 44353.8, 64002.9, 89223.7, 110183.4, 126711.9]}, "revisions": {"vintages": [{"label": "First version", "y2025": 67669.0, "y2026": 81494.0, "y2027": 97008.0, "y2028": 112949.0, "y2030": 140851.0}, {"label": "March Update", "y2025": 74164.0, "y2026": 96194.0, "y2027": 120064.0, "y2028": 144906.0, "y2030": 194254.0}, {"label": "April Update", "y2025": 76151.0, "y2026": 98494.0, "y2027": 122547.0, "y2028": 148755.0, "y2030": 202111.0}, {"label": "May Update", "y2025": 78256.0, "y2026": 101034.0, "y2027": 125557.0, "y2028": 152281.0, "y2030": 206147.0}, {"label": "June Update", "y2025": 81676.0, "y2026": 106160.0, "y2027": 131837.0, "y2028": 160869.0, "y2030": 216009.0}, {"label": "July Update", "y2025": 81506.0, "y2026": 105801.0, "y2027": 131224.0, "y2028": 160461.0, "y2030": 216645.0}, {"label": "July Update n\u00b02", "y2025": 79737.0, "y2026": 102102.0, "y2027": 125744.0, "y2028": 152999.0, "y2030": 204029.0}, {"label": "September Update", "y2025": 79447.0, "y2026": 101799.0, "y2027": 125432.0, "y2028": 152677.0, "y2030": 203876.0}, {"label": "October Update", "y2025": 79175.0, "y2026": 101501.0, "y2027": 125106.0, "y2028": 152325.0, "y2030": 203473.0}, {"label": "November Update", "y2025": 81364.0, "y2026": 109271.0, "y2027": 132434.0, "y2028": 160814.0, "y2030": 218841.0}, {"label": "November Update n\u00b02", "y2025": 81828.0, "y2026": 107407.0, "y2027": 131160.0, "y2028": 160273.0, "y2030": 219804.0}, {"label": "December Update", "y2025": 81949.0, "y2026": 107541.0, "y2027": 131306.0, "y2028": 160433.0, "y2030": 219990.0}, {"label": "January Update", "y2025": 82222.0, "y2026": 107841.0, "y2027": 131633.0, "y2028": 160790.0, "y2030": 220405.0}, {"label": "January Update n\u00b02", "y2025": 81134.0, "y2026": 106003.0, "y2027": 133970.0, "y2028": 165810.0, "y2030": 223839.0}, {"label": "February Update", "y2025": 80708.0, "y2026": 110756.0, "y2027": 144215.0, "y2028": 180680.0, "y2030": 246809.0}, {"label": "March Update", "y2025": 80490.0, "y2026": 110118.0, "y2027": 143526.0, "y2028": 179945.0, "y2030": 246163.0}, {"label": "March Update n\u00b02", "y2025": 81752.0, "y2026": 111799.0, "y2027": 146005.0, "y2028": 184319.0, "y2030": 256215.0}, {"label": "April Update", "y2025": 81752.0, "y2026": 111799.0, "y2027": 146005.0, "y2028": 184319.0, "y2030": 256215.0}, {"label": "May Update", "y2025": 77790.0, "y2026": 110015.0, "y2027": 144395.0, "y2028": 182752.0, "y2030": 255850.0}, {"label": "June Update", "y2025": 77790.0, "y2026": 110015.0, "y2027": 144395.0, "y2028": 182752.0, "y2030": 255850.0}, {"label": "June Update n\u00b02", "y2025": 77121.0, "y2026": 106586.0, "y2027": 140924.0, "y2028": 179156.0, "y2030": 252616.0}, {"label": "June Update n\u00b03", "y2025": 77095.0, "y2026": 106557.0, "y2027": 140891.0, "y2028": 179121.0, "y2030": 252573.0}, {"label": "July Update", "y2025": 77095.0, "y2026": 106557.0, "y2027": 140891.0, "y2028": 179121.0, "y2030": 252573.0}, {"label": "July Update n\u00b02", "y2025": 77314.0, "y2026": 107829.0, "y2027": 141635.0, "y2028": 179255.0, "y2030": 251260.0}, {"label": "July Update n\u00b03", "y2025": 78354.0, "y2026": 107438.0, "y2027": 139134.0, "y2028": 172128.0, "y2030": 237170.0}, {"label": "July Update n\u00b04", "y2025": 79409.0, "y2026": 107378.0, "y2027": 139067.0, "y2028": 172053.0, "y2030": 235964.0}, {"label": "August Update", "y2025": 79312.0, "y2026": 107275.0, "y2027": 138959.0, "y2028": 171941.0, "y2030": 235844.0}, {"label": "August Update n\u00b02", "y2025": 78915.0, "y2026": 107454.0, "y2027": 141251.0, "y2028": 175792.0, "y2030": 241221.0}, {"label": "September Update", "y2025": 78895.0, "y2026": 107432.0, "y2027": 141227.0, "y2028": 175764.0, "y2030": 241188.0}, {"label": "October Update", "y2025": 77191.0, "y2026": 103893.0, "y2027": 141538.0, "y2028": 183749.0, "y2030": 268227.0}, {"label": "October Update n\u00b02", "y2025": 77122.0, "y2026": 103816.0, "y2027": 141453.0, "y2028": 183657.0, "y2030": 268118.0}, {"label": "November Update", "y2025": 76336.0, "y2026": 102944.0, "y2027": 140489.0, "y2028": 182595.0, "y2030": 266850.0}, {"label": "November Update n\u00b02", "y2025": 75651.0, "y2026": 102174.0, "y2027": 139626.0, "y2028": 181633.0, "y2030": 265665.0}, {"label": "December Update", "y2025": 75651.0, "y2026": 102174.0, "y2027": 139626.0, "y2028": 181633.0, "y2030": 265665.0}, {"label": "December Update n\u00b02", "y2025": 75450.0, "y2026": 99545.0, "y2027": 140184.0, "y2028": 185266.0, "y2030": 270044.0}, {"label": "January Update", "y2025": 74801.0, "y2026": 98634.0, "y2027": 139781.0, "y2028": 185454.0, "y2030": 271464.0}, {"label": "January Update n\u00b02", "y2025": 73827.0, "y2026": 97398.0, "y2027": 137657.0, "y2028": 182321.0, "y2030": 266142.0}, {"label": "February Update", "y2025": 73754.0, "y2026": 97317.0, "y2027": 137569.0, "y2028": 182225.0, "y2030": 266029.0}, {"label": "March Update", "y2025": 73586.0, "y2026": 97131.0, "y2027": 137363.0, "y2028": 181999.0, "y2030": 265760.0}, {"label": "Current version", "y2025": 75115.0, "y2026": 100913.0, "y2027": 144102.0, "y2028": 192372.0, "y2030": 285783.0}], "oracle_pct_years": [2026, 2027, 2028, 2029, 2030], "oracle_pct": [-0.138, -0.197, -0.273, -0.355, -0.435]}, "slippage": {"n": 1207, "median_mo": 9.0, "mean_mo": 17.7, "buckets": {"~0": 2, "1-3 mo": 70, "4-6 mo": 233, "7-12 mo": 537, ">12 mo": 365}, "pct_ge_7mo": 74.7}, "dash_adds": {"years": [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032], "companies": [{"name": "AWS", "values": [359.7, 313.9, 691.8, 992.9, 807.8, 778.6, 1455.5, 2690.2, 3231.1, 4819.6, 6491.6, 6787.7, 5357.2, 3669.2, 2455.1]}, {"name": "Google", "values": [36.1, 529.9, 918.4, 317.9, 186.1, 224.0, 604.6, 1459.0, 1891.9, 4260.6, 4725.3, 4338.1, 3753.3, 2305.6, 1310.2]}, {"name": "Meta", "values": [120.0, 180.0, 288.2, 423.4, 446.7, 478.4, 392.3, 1024.4, 1558.8, 2407.6, 3702.2, 3480.1, 2697.7, 1315.7, 759.8]}, {"name": "Microsoft", "values": [135.6, 270.3, 392.8, 455.0, 465.4, 433.0, 715.6, 1023.5, 1167.0, 2197.1, 5418.1, 4520.5, 3434.7, 3032.7, 2182.0]}, {"name": "Apple", "values": [0.0, 33.8, 0.0, 0.0, 0.0, 18.2, 40.0, 0.0, 0.0, 16.6, 97.6, 54.0, 0.0, 0.0, 0.0]}, {"name": "Oracle", "values": [-5.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "xAI", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 163.0, 467.0, 816.7, 666.7, 286.7, 160.0, 160.0, 160.0, 160.0]}, {"name": "Nebius", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 204.2, 248.4, 168.4, 168.4, 168.4, 42.1]}, {"name": "Coreweave", "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 133.3, 66.7, 0.0, 0.0, 0.0, 0.0]}]}}, "meta": {"client_file": "Client_Intelligence Factory Anaysis_June11_2026 (1) - v2.xlsx", "model_file": "AI-Data-Center-Model-CLIENT-April-7-noSKU.xlsx", "nv_file": "Request_NV AI Server Model_052126 2.xlsx", "client_asof": "June 11, 2026", "model_asof": "April 7"}};
-const C = DATA.chips;
+const CC = DATA.chips.client;
+const CM = DATA.compute;
 const charts = [];
 
-function cssv(name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); }
-function fmt(v, d) { return (v==null? '' : Number(v).toFixed(d==null?1:d)); }
-function fmtK(v) { return Number(v).toLocaleString('en-US', {maximumFractionDigits:0}); }
+function cssv(n){ return getComputedStyle(document.body).getPropertyValue(n).trim(); }
+function fmt(v,d){ return (v==null?'':Number(v).toFixed(d==null?1:d)); }
+function fmtK(v){ return Number(v).toLocaleString('en-US',{maximumFractionDigits:0}); }
 const S = i => cssv('--series-'+i);
 
-function baseOpts(text, muted, grid, yTitle) {
+const refLine = {
+  id:'refLine',
+  afterDatasetsDraw(chart, args, opts){
+    if(!opts || opts.value==null) return;
+    const {ctx, chartArea:{left,right}, scales:{y}} = chart;
+    const yy = y.getPixelForValue(opts.value);
+    ctx.save();
+    ctx.setLineDash([5,4]); ctx.lineWidth=1.5; ctx.strokeStyle=opts.color;
+    ctx.beginPath(); ctx.moveTo(left,yy); ctx.lineTo(right,yy); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle=opts.color; ctx.font='600 12px system-ui, sans-serif';
+    ctx.textAlign='right'; ctx.textBaseline='bottom';
+    ctx.fillText(opts.label, right-4, yy-4);
+    ctx.restore();
+  }
+};
+Chart.register(refLine);
+
+function baseOpts(text, muted, grid, yTitle){
   return {
-    responsive: true, maintainAspectRatio: false,
-    plugins: {
-      legend: { labels: { color: text, boxWidth: 12, boxHeight: 12, usePointStyle: true, font: {size: 12} } },
-      tooltip: { callbacks: {} }
-    },
-    scales: {
-      x: { ticks: { color: muted, font: {size: 11} }, grid: { display: false }, border: { color: cssv('--baseline') } },
-      y: { ticks: { color: muted, font: {size: 11} }, grid: { color: grid }, border: { display: false },
-           title: { display: !!yTitle, text: yTitle||'', color: muted, font: {size: 11} } }
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:text, boxWidth:12, boxHeight:12, usePointStyle:true, font:{size:12}}}, tooltip:{callbacks:{}} },
+    scales:{
+      x:{ticks:{color:muted,font:{size:11}}, grid:{display:false}, border:{color:cssv('--baseline')}},
+      y:{ticks:{color:muted,font:{size:11}}, grid:{color:grid}, border:{display:false},
+         title:{display:!!yTitle, text:yTitle||'', color:muted, font:{size:11}}}
     }
   };
 }
 
-// ---------- A1: chip families ----------
-function buildChipFam(text, muted, grid) {
-  const nv = C.nv;
-  const colors = [S(1), S(2), S(3), S(6), S(7), S(5)];
-  charts.push(new Chart(document.getElementById('chipfam'), {
-    type: 'bar',
-    data: { labels: nv.chip_years,
-      datasets: nv.chip_families.map((f,i)=>({label:f.name, data:f.values, backgroundColor:colors[i%colors.length], stack:'c', borderWidth:0})) },
-    options: Object.assign(baseOpts(text,muted,grid,'k chips'), {
-      interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
-        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmtK(i.raw)+'k'}} },
-      scales:{ x:{stacked:true, ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
-        y:{stacked:true, ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'k chips',color:muted}} }
-    })
-  }));
-  const yrs = nv.chip_years;
-  const tot = y => nv.chip_families.reduce((a,f)=>a+f.values[yrs.indexOf(y)],0);
-  document.getElementById('chipfam-take').innerHTML =
-    'Shipments roughly triple from <b>'+fmtK(tot(2023))+'k</b> chips (2023, Hopper-led) to <b>'+fmtK(tot(2025))+'k</b> (2025, Blackwell-led); by 2027 Rubin (R100/200) and the X100 family carry the roadmap.';
-}
-
-// ---------- A2: racks ----------
-function buildRacks(text, muted, grid) {
-  const nv = C.nv;
-  const colors = [S(1), S(2), S(3), S(6)];
-  charts.push(new Chart(document.getElementById('racksku'), {
+// A1: ExaFLOPs by generation + cumulative
+function buildExaGen(text,muted,grid){
+  const colors=[S(2),S(1),S(6),S(3),S(7)];
+  charts.push(new Chart(document.getElementById('exagen'), {
     type:'bar',
-    data:{ labels:nv.rack_years,
-      datasets: nv.rack_by_sku.map((s,i)=>({label:s.name, data:s.values, backgroundColor:colors[i], stack:'r', borderWidth:0})) },
-    options: Object.assign(baseOpts(text,muted,grid,'racks'), {
-      interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
+    data:{ labels: CC.exa_gen_years,
+      datasets: CC.exa_by_gen.map((g,i)=>({type:'bar',label:g.name,data:g.values,backgroundColor:colors[i%colors.length],stack:'e',borderWidth:0}))
+        .concat([{type:'line',label:'Cumulative install',data:(function(){let r=0;return CC.exa_total.map(v=>r+=v);})(),
+                  borderColor:S(5), backgroundColor:S(5), borderWidth:2, pointRadius:3, tension:0.2}]) },
+    options: Object.assign(baseOpts(text,muted,grid,'ExaFLOPs'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
         tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmtK(i.raw)}} },
-      scales:{ x:{stacked:true, ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
-        y:{stacked:true, ticks:{color:muted, callback:v=>fmtK(v)},grid:{color:grid},border:{display:false},title:{display:true,text:'racks',color:muted}} }
+      scales:{ x:{stacked:true,ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{stacked:true,ticks:{color:muted,callback:v=>fmtK(v/1000)+'k'},grid:{color:grid},border:{display:false},
+           title:{display:true,text:'ExaFLOPs (thousands)',color:muted}} }
     })
   }));
-  charts.push(new Chart(document.getElementById('rackmonthly'), {
-    type:'line',
-    data:{ labels:nv.months,
-      datasets:[{label:'GB racks (NVL72)', data:nv.monthly_racks, borderColor:S(1), backgroundColor:S(1),
-        borderWidth:2, pointRadius:0, tension:0.3, fill:false}] },
-    options: Object.assign(baseOpts(text,muted,grid,'racks / month'), {
-      interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmtK(i.raw)+' racks'}} },
-      scales:{ x:{ticks:{color:muted, font:{size:9.5}, maxRotation:60, minRotation:60, autoSkip:true, maxTicksLimit:12},grid:{display:false},border:{color:cssv('--baseline')}},
-        y:{ticks:{color:muted, callback:v=>fmtK(v)},grid:{color:grid},border:{display:false},title:{display:true,text:'racks / month',color:muted}} }
-    })
-  }));
-  document.getElementById('racksku-take').innerHTML =
-    'Rack-scale shipments go <b>'+fmtK(nv.rack_totals[0])+'</b> (2025) &rarr; <b>'+fmtK(nv.rack_totals[1])+'</b> (2026) &rarr; <b>'+fmtK(nv.rack_totals[2])+'</b> (2027), with the SKU mix rolling GB200 &rarr; GB300 &rarr; VR200 in barely three years. The monthly ramp scales ~46&times; from Jan-25 to Dec-25.';
+  const cumLast = CC.exa_total.reduce((a,v)=>a+v,0);
+  document.getElementById('exagen-take').innerHTML =
+    'Compute sold grows <b>~39&times; in four years</b> ('+fmtK(CC.exa_total[0])+' &rarr; '+fmtK(CC.exa_total[4])+' ExaFLOPs/yr) as each generation multiplies FLOPs per chip: Blackwell dominates 2025&ndash;26, Rubin takes 2027, Rubin+1 arrives 2028. The cumulative install base reaches <b>'+fmtK(cumLast/1000)+'k ExaFLOPs</b> by 2028.';
 }
 
-// ---------- A3: GPUs vs ASICs + ExaFLOPs ----------
-function buildCompute(text, muted, grid) {
-  const cl = C.client;
-  charts.push(new Chart(document.getElementById('gpuasic'), {
-    type:'line',
-    data:{ labels: cl.years, datasets:[
-      {label:'Nvidia + AMD/Intel GPUs', data: cl.total_gpus, borderColor:S(1), backgroundColor:S(1), borderWidth:2, pointRadius:3, tension:0.25},
-      {label:'Custom ASICs (ex China/Ascend/Other)', data: cl.total_asics_ex_china, borderColor:S(3), backgroundColor:S(3), borderWidth:2, pointRadius:3, tension:0.25}
-    ]},
-    options: Object.assign(baseOpts(text,muted,grid,'k units'), {
-      interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
-        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmtK(i.raw)+'k'}} }
-    })
-  }));
-  charts.push(new Chart(document.getElementById('exaflops'), {
+// A2: GPU vs ASIC compute (derived)
+function buildGpuAsicExa(text,muted,grid){
+  const cs = CM.compute_split;
+  charts.push(new Chart(document.getElementById('gpuasicexa'), {
     type:'bar',
-    data:{ labels: cl.exa_years, datasets:[
-      {label:'Cumulative sold', data: cl.exa_cumulative, backgroundColor:S(1), borderRadius:4, borderSkipped:false},
-      {label:'Needed (demand est.)', data: cl.exa_needed, backgroundColor:S(7), borderRadius:4, borderSkipped:false}
+    data:{ labels: cs.years, datasets:[
+      {label:'Nvidia GPUs (sourced)', data:cs.nv_exa, backgroundColor:S(1), borderRadius:4, borderSkipped:false},
+      {label:'Custom ASICs (parity estimate)', data:cs.asic_exa_parity, backgroundColor:S(3), borderRadius:4, borderSkipped:false}
     ]},
     options: Object.assign(baseOpts(text,muted,grid,'ExaFLOPs'), {
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
         tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmtK(i.raw)}} },
       scales:{ x:{ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
-        y:{ticks:{color:muted, callback:v=>fmtK(v/1000)+'k'},grid:{color:grid},border:{display:false},title:{display:true,text:'ExaFLOPs (thousands)',color:muted}} }
+        y:{ticks:{color:muted,callback:v=>fmtK(v/1000)+'k'},grid:{color:grid},border:{display:false},
+           title:{display:true,text:'ExaFLOPs (thousands)',color:muted}} }
     })
   }));
-  const pct = C.client.exa_shortage_pct.map(x=>fmt(x*100,0)+'%');
-  const cl2 = C.client, yq = cl2.years;
-  const cross = yq.find((y,i)=> cl2.total_asics_ex_china[i] > cl2.total_gpus[i]);
-  document.getElementById('exa-take').innerHTML =
-    'With the China / Ascend / MAIA / Other bucket stripped out, custom ASICs (Google TPU, AWS Trainium, Meta/OpenAI/MSFT/xAI silicon) don\'t overtake merchant GPUs on units until <b>'+cross+'</b> &mdash; not 2026. And units are not compute: the client\'s own gap analysis (right, NVIDIA-only) still shows a shortage vs need of <b>'+pct[0]+'</b> (2026), <b>'+pct[1]+'</b> (2027) and <b>'+pct[2]+'</b> (2028), so demand outruns supply even with every GPU sold.';
+  const shr = cs.asic_exa_parity.map((a,i)=> a/(a+cs.nv_exa[i]));
+  document.getElementById('gpuasicexa-take').innerHTML =
+    'Even granting ASICs full efficiency parity, they supply only <b>'+fmt(shr[0]*100,0)+'%</b> of compute in 2024 rising to <b>'+fmt(shr[4]*100,0)+'%</b> by 2028 &mdash; ASICs win on unit count (page 2) but Nvidia\'s rack-scale watt deployment keeps it the compute majority. Any real efficiency deficit vs Nvidia lowers the ASIC share further.';
 }
 
-// ---------- B4: watts per chip ----------
-function buildWatts(text, muted, grid) {
-  const wc = C.watts_compare;
-  charts.push(new Chart(document.getElementById('watts'), {
+// A3: training wall
+function buildTrainWall(text,muted,grid){
+  charts.push(new Chart(document.getElementById('trainpow'), {
     type:'bar',
-    data:{ labels: wc.map(x=>x.gen), datasets:[
-      {label:'Client model', data: wc.map(x=>x.client), backgroundColor:S(1), borderRadius:4, borderSkipped:false},
-      {label:'Morgan Stanley', data: wc.map(x=>x.ms), backgroundColor:S(3), borderRadius:4, borderSkipped:false}
-    ]},
-    options: Object.assign(baseOpts(text,muted,grid,''), {
-      indexAxis:'y',
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
-        tooltip:{callbacks:{label:(i)=> i.raw==null ? i.dataset.label+': not modeled' : i.dataset.label+': '+fmtK(i.raw)+' W'}} },
-      scales:{ x:{beginAtZero:true, ticks:{color:muted, callback:v=>fmtK(v)+'W'},grid:{color:grid},border:{display:false},title:{display:true,text:'max W per GPU',color:muted}},
-        y:{ticks:{color:muted, font:{size:11.5}},grid:{display:false},border:{color:cssv('--baseline')}} }
-    })
-  }));
-  document.getElementById('watts-take').innerHTML =
-    'Per-chip power grows <b>~9&times; in five generations</b> (A100 400W &rarr; R300 4,600W). The sources agree exactly through VR200 (2,300W) but diverge on the 2027 flagship &mdash; <b>4,600W (client) vs 3,600W (MS)</b> &mdash; and only the client models the 7,000W F200. Every step up makes air cooling &mdash; and grid interconnects &mdash; harder.';
-}
-
-// ---------- B5: bridge ----------
-function buildBridge(text, muted, grid) {
-  const b = C.bridge;
-  charts.push(new Chart(document.getElementById('bridge'), {
-    type:'bar',
-    data:{ labels: b.years, datasets:[
-      {label:'Chip-implied DC power (global racks, PUE '+b.pue+')', data: b.implied_gw, backgroundColor:S(6), borderRadius:4, borderSkipped:false},
-      {label:'Client: US DC additions', data: b.client_us_additions_gw, backgroundColor:S(3), borderRadius:4, borderSkipped:false},
-      {label:'Model: US supply added', data: b.model_us_additions_gw, backgroundColor:S(1), borderRadius:4, borderSkipped:false}
-    ]},
+    data:{ labels: CC.training_years, datasets:[
+      {label:'GW', data: CC.training_power_mw.map(v=>v/1000), backgroundColor:S(6), borderRadius:4, borderSkipped:false} ]},
     options: Object.assign(baseOpts(text,muted,grid,'GW'), {
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
-        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} }
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>fmt(i.raw)+' GW'}} }
     })
   }));
-  document.getElementById('bridge-take').innerHTML =
-    'A year\'s NVL72 racks alone need <b>'+fmt(b.implied_gw[0])+' / '+fmt(b.implied_gw[1])+' / '+fmt(b.implied_gw[2])+' GW</b> of facility power (2025/26/27). By 2027 that approaches the client\'s <i>entire</i> US additions ('+fmt(b.client_us_additions_gw[2])+' GW) &mdash; and racks are global <i>and</i> exclude HGX servers, so the real chip pull is higher. Only the supply model\'s aggressive buildout ('+fmt(b.model_us_additions_gw[2])+' GW added in 2027) leaves comfortable headroom.';
-}
-
-// ---------- B6: US power trajectory ----------
-function buildUsPower(text, muted, grid) {
-  const cl = C.client;
-  charts.push(new Chart(document.getElementById('uspower'), {
-    type:'bar',
-    data:{ labels: cl.years, datasets:[
-      {type:'line', label:'US DC power (GW)', data: cl.us_power_gw, borderColor:S(1), backgroundColor:S(1), borderWidth:2, pointRadius:3, tension:0.25, yAxisID:'y'},
-      {type:'bar', label:'YoY additions (GW)', data: cl.us_additions_gw, backgroundColor:S(2), borderRadius:4, borderSkipped:false, yAxisID:'y'}
-    ]},
-    options: Object.assign(baseOpts(text,muted,grid,'GW'), {
-      interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
-        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} }
-    })
-  }));
-  const gw = cl.us_power_gw;
-  document.getElementById('uspower-take').innerHTML =
-    'US data center power <b>~3.6&times;</b> in five years: '+fmt(gw[0])+' GW (2023) &rarr; <b>'+fmt(gw[gw.length-1])+' GW</b> (2028), with annual additions accelerating from '+fmt(cl.us_additions_gw[1])+' to '+fmt(cl.us_additions_gw[5])+' GW/yr.';
-}
-
-// ---------- C7: self-build vs leasing vs neocloud ----------
-function buildSbl(text, muted, grid) {
-  const bo = C.buildout;
-  const idx25 = bo.years.indexOf(2025), idx28 = bo.years.indexOf(2028);
-  const cats = [
-    {key:'Self-build - North America', label:'Self-build NA', color:S(1)},
-    {key:'Leasing - North America', label:'Leasing NA', color:S(2)},
-    {key:'Contracted Neocloud capacity', label:'Contracted Neocloud', color:S(6)}
-  ];
-  const names = bo.hyperscalers.map(h=>h.name);
-  // shared y-max across both years so 2025 and 2028 are visually comparable
-  const stackTotal = (h, idx) => cats.reduce((a,c)=> a + (h.sub[c.key] ? h.sub[c.key][idx] : 0), 0) / 1000;
-  const yMax = Math.ceil(Math.max(...bo.hyperscalers.flatMap(h => [stackTotal(h, idx25), stackTotal(h, idx28)])) * 1.08);
-  const mk = (id, idx, showLegend) => {
-    charts.push(new Chart(document.getElementById(id), {
-      type:'bar',
-      data:{ labels:names, datasets: cats.map(c=>({
-        label:c.label, backgroundColor:c.color, stack:'s', borderWidth:0,
-        data: bo.hyperscalers.map(h=> (h.sub[c.key] ? h.sub[c.key][idx] : 0) / 1000 )
-      }))},
-      options: Object.assign(baseOpts(text,muted,grid,'GW'), {
-        interaction:{mode:'index', intersect:false},
-        plugins:{ legend:{display:showLegend, labels:{color:text, usePointStyle:true, boxWidth:12}},
-          tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} },
-        scales:{ x:{stacked:true, ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
-          y:{stacked:true, max: yMax, ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted}} }
-      })
-    }));
-  };
-  mk('sbl25', idx25, true); mk('sbl28', idx28, true);
-  const ms = bo.hyperscalers.find(h=>h.name==='Microsoft');
-  const orc = bo.hyperscalers.find(h=>h.name==='Oracle');
-  document.getElementById('sbl-take').innerHTML =
-    'Most hyperscalers stay self-build-led (AWS, Google, Meta), but the sourcing mix diverges: <b>Oracle is ~'+fmt(100*(orc.sub['Leasing - North America'][idx28])/(orc.sub['Leasing - North America'][idx28]+orc.sub['Self-build - North America'][idx28]),0)+'% leased</b> in NA by 2028, and Microsoft adds <b>'+fmt(ms.sub['Contracted Neocloud capacity'][idx28]/1000)+' GW of contracted neocloud</b> capacity on top of its own builds &mdash; capacity it rents from CoreWeave-style operators rather than building or leasing conventionally.';
-}
-
-// ---------- C8: neocloud & AI lab ramp ----------
-function buildNeoRamp(text, muted, grid) {
-  const bo = C.buildout;
-  const y0 = bo.years.indexOf(2022), y1 = bo.years.indexOf(2030);
-  const yrs = bo.years.slice(y0, y1+1);
-  const cut = a => a.slice(y0, y1+1).map(v=>v/1000);
-  const labColors = [S(2), S(5), S(3), S(6), S(7)];
-  const ds = [{label:'All neoclouds (global)', data: cut(bo.global_neocloud), borderColor:S(1), backgroundColor:S(1), borderWidth:2.5, pointRadius:0, tension:0.25}];
-  bo.ai_labs.forEach((l,i)=> ds.push({label:l.name, data: cut(l.values), borderColor:labColors[i%labColors.length],
-    backgroundColor:labColors[i%labColors.length], borderWidth:2, pointRadius:0, borderDash:[6,3], tension:0.25}));
-  charts.push(new Chart(document.getElementById('neoramp'), {
+  charts.push(new Chart(document.getElementById('trainshare'), {
     type:'line',
-    data:{ labels:yrs, datasets:ds },
-    options: Object.assign(baseOpts(text,muted,grid,'GW'), {
-      interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
-        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw,2)+' GW'}} }
+    data:{ labels: CC.training_share_years, datasets:[
+      {label:'share', data: CC.training_share.map(v=>v*100), borderColor:S(7), backgroundColor:S(7),
+       borderWidth:2.5, pointRadius:4, tension:0.2} ]},
+    options: Object.assign(baseOpts(text,muted,grid,'% of NVDA sales'), {
+      plugins:{ legend:{display:false}, refLine:{value:100, color:cssv('--critical'), label:'100% of supply'},
+        tooltip:{callbacks:{label:(i)=>fmt(i.raw,0)+'%'}} },
+      scales:{ x:{ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{beginAtZero:true, suggestedMax:150, ticks:{color:muted,callback:v=>v+'%'},grid:{color:grid},border:{display:false},
+           title:{display:true,text:'% of NVDA sales',color:muted}} }
     })
   }));
-  const i28 = yrs.indexOf(2028);
-  const labs28 = bo.ai_labs.reduce((a,l)=>a+l.values[bo.years.indexOf(2028)],0)/1000;
-  document.getElementById('neoramp-take').innerHTML =
-    'Neoclouds (solid line) grow from ~1.3 GW (2025) to <b>'+fmt(cut(bo.global_neocloud)[i28])+' GW</b> by 2028 &mdash; but the frontier labs\' identified data-center footprints (dashed) total <b>'+fmt(labs28)+' GW</b> by 2028, led by OpenAI ('+fmt(bo.ai_labs[0].values[bo.years.indexOf(2028)]/1000)+' GW). The labs, not the neoclouds, are the biggest new class of capacity user.';
+  document.getElementById('train-take').innerHTML =
+    'Training power for the top-5 US labs compounds at 2.25&times;/yr: <b>5 GW (2026) &rarr; 558 GW (2030)</b>. By <b>2028 training alone would need 132% of all NVIDIA Blackwell-equivalent sales</b> &mdash; the demand wall arrives before the chips do.';
 }
 
-// ---------- C9: who buys + tenant tags ----------
-const SEGMENTS = {
-  'Microsoft':'Hyperscaler', 'Google':'Hyperscaler', 'Amazon':'Hyperscaler', 'Meta Platforms':'Hyperscaler',
-  'Oracle':'Oracle',
-  'Coreweave':'Neocloud', 'Nebius':'Neocloud', 'MegaSpeed':'Neocloud', 'Lambda':'Neocloud', 'TogetherAI':'Neocloud',
-  'Tesla/X':'Tesla / xAI',
-  'Others':'Other'
-};
-function buildWhoBuys(text, muted, grid) {
-  const nv = C.nv;
-  const segNames = ['Hyperscaler','Oracle','Neocloud','Tesla / xAI','Other'];
-  const segColors = [S(1), S(2), S(6), S(3), cssv('--muted')];
-  const sums = yr => {
-    const acc = Object.fromEntries(segNames.map(s=>[s,0]));
-    nv.customers[yr].forEach(c => { acc[SEGMENTS[c.name] || 'Other'] += c.kracks; });
-    return acc;
-  };
-  const s25 = sums('2025'), s26 = sums('2026');
-  charts.push(new Chart(document.getElementById('whobuys'), {
+// B4: TWh trajectory
+function buildTwhTraj(text,muted,grid){
+  charts.push(new Chart(document.getElementById('twhtraj'), {
     type:'bar',
-    data:{ labels:['2025','2026'], datasets: segNames.map((s,i)=>({
-      label:s, backgroundColor:segColors[i], stack:'w', borderWidth:0, data:[s25[s], s26[s]] }))},
-    options: Object.assign(baseOpts(text,muted,grid,'k racks'), {
-      interaction:{mode:'index', intersect:false},
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12}},
-        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+'k racks'}} },
-      scales:{ x:{stacked:true, ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
-        y:{stacked:true, ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'k racks',color:muted}} }
+    data:{ labels: CC.years, datasets:[
+      {type:'bar', label:'Base DC (ex-GenAI)', data: CC.twh_base_global, backgroundColor:S(2), stack:'t', borderWidth:0},
+      {type:'bar', label:'GenAI', data: CC.twh_genai_global, backgroundColor:S(1), stack:'t', borderWidth:0},
+      {type:'line', label:'US GenAI', data: CC.twh_genai_us, borderColor:S(3), backgroundColor:S(3),
+       borderWidth:2, pointRadius:3, tension:0.25}
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid,'TWh'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw,0)+' TWh'}} },
+      scales:{ x:{stacked:true,ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{stacked:true,ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'TWh',color:muted}} }
     })
   }));
+  const g0=CC.twh_genai_global[0], g5=CC.twh_genai_global[5], b5=CC.twh_base_global[5];
+  document.getElementById('twhtraj-take').innerHTML =
+    'GenAI grows <b>'+fmt(g5/g0,0)+'&times;</b> in five years ('+fmt(g0,0)+' &rarr; '+fmt(g5,0)+' TWh) and overtakes the entire non-AI data-center base ('+fmt(b5,0)+' TWh) in 2028. The US carries ~57% of global GenAI energy.';
+}
 
-  const tg = DATA.supply.tenant_gw;
-  const tags = [
-    {label:'Hyperscaler-leased (tagged)', v:tg.hyperscaler_leased, color:S(1)},
-    {label:'AI-lab end user (tagged)', v:tg.ai_lab_tagged, color:S(2)},
-    {label:'Neocloud-leased (tagged)', v:tg.neocloud_leased, color:S(6)},
-    {label:'Other tagged', v:tg.other_tagged, color:S(3)},
-    {label:'Untagged', v:tg.untagged, color:cssv('--muted')}
-  ];
-  charts.push(new Chart(document.getElementById('tenanttag'), {
+// B5: TWh split (derived)
+function buildTwhSplit(text,muted,grid){
+  const es = CM.energy_split;
+  charts.push(new Chart(document.getElementById('twhsplit'), {
     type:'bar',
-    data:{ labels:['US Planned+UC'], datasets: tags.map(t=>({label:t.label, data:[t.v], backgroundColor:t.color, stack:'t', borderWidth:0})) },
+    data:{ labels: es.years, datasets:[
+      {type:'bar', label:'GPUs (derived)', data: es.gpu_twh, backgroundColor:S(1), stack:'s', borderWidth:0},
+      {type:'bar', label:'Custom ASICs (derived)', data: es.asic_twh, backgroundColor:S(3), stack:'s', borderWidth:0},
+      {type:'line', label:"Client's aggregate GenAI TWh", data: es.client_total_twh, borderColor:S(7), backgroundColor:S(7),
+       borderWidth:2, borderDash:[6,4], pointRadius:3, tension:0.25}
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid,'TWh'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw,0)+' TWh'}} },
+      scales:{ x:{stacked:true,ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{stacked:true,ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'TWh',color:muted}} }
+    })
+  }));
+  document.getElementById('val-ratio').textContent = fmt(es.validation_ratio[5]*100,0)+'%';
+  const shr = es.years.map((y,i)=> es.asic_twh[i]/(es.asic_twh[i]+es.gpu_twh[i]));
+  document.getElementById('twhsplit-take').innerHTML =
+    'GPUs burn roughly <b>'+fmt((1-shr[5])*100,0)+'%</b> of GenAI electricity through 2028; the ASIC share climbs from '+fmt(shr[0]*100,0)+'% to <b>'+fmt(shr[5]*100,0)+'%</b> as TPU v7/v8 and Trainium successors ramp. The derivation recovers '+fmt(es.validation_ratio[5]*100,0)+'% of the client\'s own 2028 aggregate ('+fmt(es.client_total_twh[5],0)+' TWh) &mdash; the residual is non-chip overhead (networking, storage) and watt-assumption error.';
+}
+
+// C6: by company
+function buildByCompany(text,muted,grid){
+  const cu = CM.customer;
+  const yrs = cu.years;
+  const colors=[S(1),S(5),S(2),S(3),S(6),S(8)];
+  const ds = cu.companies.map((c,i)=>({label:c.name, data:c.values.map(v=>v/1000),
+    borderColor:colors[i%colors.length], backgroundColor:colors[i%colors.length],
+    borderWidth:2, pointRadius:0, tension:0.25}));
+  const others = yrs.map((y,i)=> (cu.ai_power_mw[i]-cu.hyperscaler_ai_mw[i])/1000);
+  ds.push({label:'All others (neoclouds, labs, China…)', data: others, borderColor:cssv('--muted'),
+    backgroundColor:cssv('--muted'), borderWidth:2, borderDash:[6,3], pointRadius:0, tension:0.25});
+  charts.push(new Chart(document.getElementById('bycompany'), {
+    type:'line', data:{ labels: yrs, datasets: ds },
     options: Object.assign(baseOpts(text,muted,grid,'GW'), {
-      indexAxis:'y',
-      plugins:{ legend:{labels:{color:text, usePointStyle:true, boxWidth:12, font:{size:11}}},
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12,font:{size:11.5}}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} }
+    })
+  }));
+  const i28=yrs.indexOf(2028), i32=yrs.indexOf(2032);
+  const goog=cu.companies.find(c=>c.name==='Google');
+  document.getElementById('bycompany-take').innerHTML =
+    '<b>Google leads AI power demand</b> ('+fmt(goog.values[i28]/1000)+' GW by 2028, '+fmt(goog.values[i32]/1000,0)+' GW by 2032), with Microsoft/Meta/Amazon/Oracle clustered at 10&ndash;12 GW in 2028. The non-hyperscaler wedge (dashed) reaches <b>'+fmt(others[i28],0)+' GW by 2028</b> &mdash; nearly half the market that page 2 showed is barely tenant-tagged.';
+}
+
+// C7: by type
+function buildByType(text,muted,grid){
+  const cu = CM.customer;
+  const other = cu.type_years.map((y,i)=> Math.max(0, cu.type_total[i]-cu.type_hyperscaler[i]-cu.type_neoclouds[i]-cu.type_china[i]));
+  charts.push(new Chart(document.getElementById('bytype'), {
+    type:'bar',
+    data:{ labels: cu.type_years, datasets:[
+      {label:'Hyperscalers', data: cu.type_hyperscaler.map(v=>v/1000), backgroundColor:S(1), stack:'t', borderWidth:0},
+      {label:'Leading neoclouds & enterprises', data: cu.type_neoclouds.map(v=>v/1000), backgroundColor:S(6), stack:'t', borderWidth:0},
+      {label:'Chinese hyperscalers', data: cu.type_china.map(v=>v/1000), backgroundColor:S(7), stack:'t', borderWidth:0},
+      {label:'All other', data: other.map(v=>v/1000), backgroundColor:cssv('--muted'), stack:'t', borderWidth:0}
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid,'GW'), {
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
         tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw)+' GW'}} },
-      scales:{ x:{stacked:true, beginAtZero:true, ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted}},
-        y:{stacked:true, ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}} }
+      scales:{ x:{stacked:true,ticks:{color:muted},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{stacked:true,ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted}} }
     })
   }));
-  const neoShare26 = 100*s26['Neocloud']/(segNames.reduce((a,s)=>a+s26[s],0));
-  const tagged = tg.hyperscaler_leased+tg.ai_lab_tagged+tg.neocloud_leased+tg.other_tagged;
-  document.getElementById('whobuys-take').innerHTML =
-    'Hyperscalers take the majority of racks, but neoclouds hold ~<b>'+fmt(neoShare26,0)+'%</b> of 2026 allocations and Oracle alone rivals the biggest hyperscalers. On the facility side, of 228 GW US Planned+UC only <b>'+fmt(tagged,0)+' GW is tenant-tagged</b> ('+fmt(tg.ai_lab_tagged,0)+' GW frontier labs, '+fmt(tg.hyperscaler_leased,0)+' GW hyperscaler leases, '+fmt(tg.neocloud_leased,1)+' GW neoclouds) &mdash; the untagged 76% is where the speculative pipeline lives.';
+  document.getElementById('bytype-take').innerHTML =
+    'Hyperscalers hold ~<b>'+fmt(100*cu.type_hyperscaler[3]/cu.type_total[3],0)+'%</b> of tagged 2026 AI power; leading neoclouds &amp; enterprises reach <b>'+fmt(cu.type_neoclouds[3]/1000,1)+' GW</b> (CoreWeave '+fmt(cu.neo_coreweave[3]/1000,2)+' GW, xAI '+fmt(cu.neo_xai[3]/1000,2)+' GW) and Chinese hyperscalers <b>'+fmt(cu.type_china[3]/1000,1)+' GW</b>. The model stops typing customers after 2026.';
 }
 
-function buildAll() {
+function buildAll(){
   const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
-  buildChipFam(text,muted,grid);
-  buildRacks(text,muted,grid);
-  buildCompute(text,muted,grid);
-  buildWatts(text,muted,grid);
-  buildBridge(text,muted,grid);
-  buildUsPower(text,muted,grid);
-  buildSbl(text,muted,grid);
-  buildNeoRamp(text,muted,grid);
-  buildWhoBuys(text,muted,grid);
+  buildExaGen(text,muted,grid);
+  buildGpuAsicExa(text,muted,grid);
+  buildTrainWall(text,muted,grid);
+  buildTwhTraj(text,muted,grid);
+  buildTwhSplit(text,muted,grid);
+  buildByCompany(text,muted,grid);
+  buildByType(text,muted,grid);
 }
 function rebuild(){ while(charts.length){charts.pop().destroy();} buildAll(); }
 
 document.getElementById('src-line').textContent =
-  'Sources: ' + DATA.meta.nv_file + ' (MS Nvidia server model); ' + DATA.meta.model_file + '; ' + DATA.meta.client_file + '.';
+  'Sources: ' + DATA.meta.client_file + ' (Power Summary, Compute Demand); ' + DATA.meta.model_file + ' (AI Demand by Customer).';
 
 buildAll();
 if (window.matchMedia) {

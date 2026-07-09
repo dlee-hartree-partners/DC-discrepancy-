@@ -1,6 +1,6 @@
 # DC Discrepancy Dashboards
 
-Two cross-linked dashboard pages built from three data-center workbooks:
+Four cross-linked dashboard pages built from three data-center workbooks:
 
 | Source | File | Key tabs |
 |--------|------|----------|
@@ -14,6 +14,16 @@ the client's *Power Shortfall Before New "Time to Power" Solutions* (**37.71 GW*
 **Page 2 (`chips_dashboard.html`):** chip demand (which SKUs, how many), power per chip, the derived
 chip→data-center power bridge, and what kind of capacity it lands in (self-build vs leased vs neocloud).
 
+**Page 3 (`compute_dashboard.html`):** compute (ExaFLOPs) and energy (TWh) over time — Nvidia by
+generation, derived GPU-vs-ASIC splits (labeled assumptions, validated against the client's own
+aggregate), the training wall, and AI power demand by company and customer type.
+
+**Page 4 (`synthesis_dashboard.html`):** the synthesis — verdicts with evidence on (a) whether delays
+damp chip demand (they defer it: ~40 forecast vintages show "slower now, bigger later"; median 9-month
+modeled slippage; constrained demand runs ~13% below unconstrained in 2028) and (b) whether chip supply
+outpaces buildout (yes — the model's own NA balance runs a cumulative deficit every year 2023–2030),
+plus a dedicated section on where the three spreadsheets disagree (~64 GW spread on the same question).
+
 ## Run
 
 ```bash
@@ -25,6 +35,8 @@ This reads the three workbooks and writes:
 
 - **`dashboard.html`** — supply vs shortfall (page 1).
 - **`chips_dashboard.html`** — chips, power & buildout (page 2).
+- **`compute_dashboard.html`** — compute & energy over time (page 3).
+- **`synthesis_dashboard.html`** — delays, the race, and cross-file disagreements (page 4).
 - **`dashboard_data.json`** — all extracted + reconciled figures.
 
 Both pages are self-contained (Chart.js inlined) and work offline. A built-in self-check aborts
@@ -73,8 +85,10 @@ if any anchor cell reference drifts from the expected values.
 
 | File | Purpose |
 |------|---------|
-| `build_dashboard.py` | Extraction, reconciliation, HTML generation (both pages) |
+| `build_dashboard.py` | Extraction, derivation, reconciliation, HTML generation (all pages) |
 | `dashboard_template.html` | Page 1 template (shortfall charts) |
 | `chips_template.html` | Page 2 template (chips & buildout charts) |
+| `compute_template.html` | Page 3 template (compute & energy charts) |
+| `synthesis_template.html` | Page 4 template (verdicts, delays, discrepancies) |
 | `vendor/chart.umd.js` | Vendored Chart.js v4 (inlined for offline use) |
-| `dashboard.html` / `chips_dashboard.html` / `dashboard_data.json` | Generated output |
+| `dashboard.html` / `chips_dashboard.html` / `compute_dashboard.html` / `synthesis_dashboard.html` / `dashboard_data.json` | Generated output |
