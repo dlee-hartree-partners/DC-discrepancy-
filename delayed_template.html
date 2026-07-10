@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>US Data Centers &mdash; Cancelled &amp; Delayed</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --land: #ecebe4;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --series-6: #4a3aa7;
+    --critical: #d03b3b;
+    --warning: #e0930a;
+    /* cancelled / delay gradient palette */
+    --cancel: #c01822;      /* cancelled = red */
+    --delay-lo: #f2c200;    /* small delay = yellow */
+    --delay-hi: #d0301f;    /* large delay = red */
+    --pipe: #b06a2c;
+    --shadow: 0 1px 2px rgba(11,11,11,0.05), 0 1px 3px rgba(11,11,11,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface-1: #1a1a19;
+      --land: #232322;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-6: #9085e9;
+      --critical: #e66767;
+      --warning: #f0a83a;
+      --cancel: #e5484d;
+      --delay-lo: #f2ce3a;
+      --delay-hi: #e0533a;
+      --pipe: #c98a55;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.45; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  nav.pagenav { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  nav.pagenav a {
+    font-size: 13px; padding: 6px 14px; border-radius: 999px; text-decoration: none;
+    border: 1px solid var(--border); color: var(--text-secondary); background: var(--surface-1);
+  }
+  nav.pagenav a.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header .sub { color: var(--text-secondary); font-size: 15px; margin: 0 0 4px; }
+  header .src { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+  .banner {
+    margin: 22px 0 26px; padding: 14px 16px; border-radius: 10px;
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface-1));
+    border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);
+  }
+  .banner b { color: var(--text-primary); }
+  .section-label {
+    font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+    margin: 30px 0 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ""; flex: 1; height: 1px; background: var(--gridline); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 6px 0 8px; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .kpi .label { font-size: 11.5px; color: var(--text-secondary); }
+  .kpi .val { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; margin-top: 3px; }
+  .kpi .val .unit { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .kpi .note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .kpi.delayed { border-top: 3px solid var(--delay-hi); }
+  .kpi.cancelled { border-top: 3px solid var(--cancel); }
+  .kpi.energy { border-top: 3px solid var(--series-6); }
+  .kpi.sites { border-top: 3px solid var(--series-1); }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 20px; box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .card h2 { font-size: 16.5px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .card .cap { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+  .card .cap .cell { color: var(--muted); }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; font-size: 12.5px; }
+  .controls .lbl { color: var(--muted); margin-right: 2px; }
+  .controls button {
+    font-size: 12px; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer;
+  }
+  .controls button.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  /* map */
+  .mapwrap { position: relative; }
+  svg.usmap { width: 100%; height: auto; display: block; cursor: grab; touch-action: none; }
+  svg.usmap.grabbing { cursor: grabbing; }
+  svg.usmap .state { fill: var(--land); stroke: var(--baseline); stroke-width: 0.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  svg.usmap circle { stroke: var(--surface-1); stroke-width: 0.4; vector-effect: non-scaling-stroke; }
+  svg.usmap circle.cancel { stroke: color-mix(in srgb, var(--cancel) 60%, #000); stroke-width: 0.8; }
+  svg.usmap circle.cited { stroke: var(--text-primary); stroke-width: 1.3; }
+  svg.usmap .pipe { fill: none; stroke: var(--pipe); stroke-width: 0.5; stroke-opacity: 0.5; vector-effect: non-scaling-stroke; }
+  .zoomctl { position: absolute; top: 10px; right: 10px; display: flex; flex-direction: column; gap: 4px; z-index: 4; }
+  .zoomctl button {
+    width: 30px; height: 30px; font-size: 16px; line-height: 1; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+    border-radius: 7px; box-shadow: var(--shadow);
+  }
+  .zoomctl button.reset { font-size: 11px; }
+  .maptip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .08s;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 8px 10px; font-size: 12px; color: var(--text-primary);
+    max-width: 250px; z-index: 5;
+  }
+  .maptip .t-co { font-weight: 600; }
+  .maptip .t-sub { color: var(--text-secondary); }
+  .maptip .t-tag { display:inline-block; font-size:10px; font-weight:600; padding:1px 6px; border-radius:999px; margin-top:4px; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0 2px; font-size: 12.5px; color: var(--text-secondary); align-items:center; }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .legend .dot.ring { border: 2px solid var(--text-primary); }
+  .legend .gbar { width: 120px; height: 12px; border-radius: 3px;
+    background: linear-gradient(90deg, var(--delay-lo), var(--delay-hi)); display:inline-block; }
+  .sizekey { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .sizekey svg { overflow: visible; }
+  .chart-box { position: relative; height: 260px; }
+  .takeaway { font-size: 13px; color: var(--text-secondary); margin-top: 12px; padding-left: 12px; border-left: 3px solid var(--delay-hi); }
+  .takeaway b { color: var(--text-primary); }
+  /* citation table */
+  table.cites { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.cites th, table.cites td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--gridline); vertical-align: top; }
+  table.cites th { color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+  table.cites td.proj { font-weight: 600; color: var(--text-primary); }
+  table.cites td .loc { color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  table.cites a { color: var(--series-1); text-decoration: none; }
+  table.cites a:hover { text-decoration: underline; }
+  table.cites .quote { color: var(--text-secondary); font-size: 11.5px; font-style: italic; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.03em;
+    padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .pill.cancelled { background: color-mix(in srgb, var(--cancel) 16%, var(--surface-1)); color: var(--cancel);
+    border: 1px solid color-mix(in srgb, var(--cancel) 35%, transparent); }
+  .pill.delayed { background: color-mix(in srgb, var(--warning) 18%, var(--surface-1)); color: var(--warning);
+    border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); }
+  .conf { font-size: 10px; color: var(--muted); }
+  .macro { list-style: none; padding: 0; margin: 0; }
+  .macro li { padding: 12px 0; border-bottom: 1px solid var(--gridline); }
+  .macro li:last-child { border-bottom: none; }
+  .macro .mh { font-weight: 650; font-size: 13.5px; color: var(--text-primary); }
+  .macro .md { font-size: 12.5px; color: var(--text-secondary); margin: 3px 0 4px; }
+  .macro .ms { font-size: 11.5px; color: var(--muted); }
+  .macro a { color: var(--series-1); text-decoration: none; }
+  .macro a:hover { text-decoration: underline; }
+  footer { margin-top: 34px; color: var(--muted); font-size: 12px; text-align: center; }
+  @media (max-width: 820px) { .kpis { grid-template-columns: repeat(2,1fr); } }
+</style>
+</head>
+<body data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
+<div class="wrap">
+  <nav class="pagenav">
+    <a href="dashboard.html">Supply vs Shortfall</a>
+    <a href="chips_dashboard.html">Chips &amp; Buildout</a>
+    <a href="compute_dashboard.html">Compute &amp; Energy</a>
+    <a href="synthesis_dashboard.html">Synthesis</a>
+    <a href="geo_dashboard.html">Geography &amp; Deployment</a>
+    <a href="flows_dashboard.html">Flows &amp; Patterns</a>
+    <a href="chippower_dashboard.html">Chip Power &amp; Energy</a>
+    <a href="delayed_dashboard.html" class="active">Cancelled &amp; Delayed</a>
+  </nav>
+  <header>
+    <h1>US Data Centers &mdash; Cancelled &amp; Delayed</h1>
+    <p class="sub">Sites that were <b>originally supposed to come online in 2026&ndash;2028</b> but are now cancelled or slipping &mdash; mapped, with the GW and energy (TWh) that removes from the buildout.</p>
+    <p class="src" id="src-line"></p>
+  </header>
+
+  <div class="banner">
+    <b>Scope: only sites whose <u>original</u> online date (col BY, &ldquo;Start of operations&rdquo;) fell in 2026&ndash;2028.</b>
+    The model has no status flag, so status is derived: <b style="color:var(--cancel)">cancelled</b> = the model's live date (col CC)
+    is a far-future sentinel (&ge;2034) or blank while capacity is still planned; <b style="color:var(--delay-hi)">delayed</b> = the live date
+    slips &gt;3 months past the original, colored on a <b>yellow&rarr;red</b> gradient by the length of the slip.
+    Because most real cancellations were killed <i>pre-construction</i> by local opposition, the model under-counts them &mdash; so
+    <b>externally-reported cancellations/delays are overlaid as ringed markers</b> (hover for the source), including a cluster in Indiana.
+    Faint brown lines are the EIA gas-pipeline network (same basemap as the Geography page). Energy uses the model's own 8760h &times; utilization &times; PUE.
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="section-label">Map &middot; original-2026&ndash;2028 sites now cancelled or delayed</div>
+
+  <div class="card">
+    <h2>1. Where the cancelled &amp; delayed capacity is</h2>
+    <p class="cap">Each circle is a US facility originally due 2026&ndash;2028; area &prop; GW (Planned+UC). Red = cancelled; yellow&rarr;red = length of delay. Ringed markers are externally-reported, cited projects. Scroll or use +/&minus; to zoom; drag to pan. <span class="cell">(NA Data Center Supply: Lat/Long CN/CO, BY vs CC; EIA pipelines)</span></p>
+    <div class="controls" id="map-controls">
+      <span class="lbl">Show</span>
+      <button data-flt="all" class="active">All</button>
+      <button data-flt="delayed">Delayed only</button>
+      <button data-flt="cancelled">Cancelled only</button>
+      <button data-flt="cited">Cited only</button>
+      <span class="sep" style="width:1px;background:var(--gridline);align-self:stretch;margin:2px 6px;"></span>
+      <span class="lbl">Phase</span>
+      <button data-phase="all" class="active">All</button>
+      <button data-phase="uc">Under construction</button>
+      <button data-phase="planned">Planned</button>
+      <span class="sep" style="width:1px;background:var(--gridline);align-self:stretch;margin:2px 6px;"></span>
+      <button data-toggle="pipes" class="active">Pipelines</button>
+      <button data-toggle="cited" class="active">Cited markers</button>
+    </div>
+    <div class="legend" id="map-legend"></div>
+    <div class="mapwrap">
+      <svg id="map" class="usmap" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="US cancelled and delayed data center map"></svg>
+      <div class="zoomctl" data-for="map">
+        <button data-z="in" title="Zoom in">+</button>
+        <button data-z="out" title="Zoom out">&minus;</button>
+        <button data-z="reset" class="reset" title="Reset view">Reset</button>
+      </div>
+      <div class="maptip" id="maptip"></div>
+    </div>
+    <div class="sizekey" id="sizekey"></div>
+    <p class="takeaway" id="map-take"></p>
+  </div>
+
+  <div class="section-label">How long the delays run</div>
+
+  <div class="card">
+    <h2>2. Distribution of the slip (originally 2026&ndash;2028)</h2>
+    <p class="cap">How far the model pushes each site's live date past its original Start-of-operations date; the last bucket also holds the cancelled/indefinite sites. <span class="cell">(NA Data Center Supply: col CC minus col BY)</span></p>
+    <div class="chart-box"><canvas id="hist"></canvas></div>
+    <p class="takeaway" id="hist-take"></p>
+  </div>
+
+  <div class="section-label">Effect on the 2026&ndash;2028 power shortfall</div>
+
+  <div class="card">
+    <h2>3. Does this contest the shortfall's &ldquo;under construction&rdquo; line? <span id="verdict-tag"></span></h2>
+    <p class="cap">The client's waterfall (page 1) is <b>demand 67.6 &minus; DC under-construction 14.9 &minus; grid access 15.0 = 37.7 GW</b> shortfall, and it treats that under-construction capacity as reliably online in the window. So the test is: of the capacity slipping here, how much is <b>committed (under construction)</b> vs <b>paper (Planned)</b>, and does the revised date still land <b>by 2028</b> or slip <b>past 2028</b>? <span class="cell">(cross-source: model NA Data Center Supply col BV/CD/CC vs client US Shortfall Analysis)</span></p>
+    <div class="chart-box tall" style="height:300px"><canvas id="shortfall"></canvas></div>
+    <p class="takeaway" id="short-take"></p>
+  </div>
+
+  <div class="section-label">Externally reported cancellations &amp; delays <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-size:11px;">&mdash; cited</span></div>
+
+  <div class="card">
+    <h2>4. Named projects reported cancelled or delayed</h2>
+    <p class="cap">Specific US projects with public reporting (these are the ringed markers on the map). Many were killed pre-construction by local opposition and are not in the supply model. &ldquo;Model GW&rdquo; = that operator's in-model delayed+cancelled capacity (company-level context). Coordinates are approximate city/county centroids. Click a project for the source.</p>
+    <div id="cite-table"></div>
+  </div>
+
+  <div class="card">
+    <h2>5. Portfolio / analyst-level pullbacks</h2>
+    <p class="cap">Aggregate reports of pullbacks and the debate over how much is real.</p>
+    <ul class="macro" id="macro"></ul>
+  </div>
+
+  <footer>Generated by <code>build_dashboard.py</code> &middot; self-contained &middot; map via vendored D3 + us-atlas + EIA pipelines &middot; histogram via Chart.js &middot; &ldquo;cancelled&rdquo; = far-future model live date (proxy), grounded by cited external reporting</footer>
+</div>
+
+<script>/*__CHARTJS__*/</script>
+<script>/*__D3__*/</script>
+<script>/*__TOPOJSON__*/</script>
+<script>
+const DATA = __DATA__;
+const DC = DATA.delayed_cancelled;
+const US_TOPO = __USTOPO__;
+const PIPES = __PIPES__;
+const facs = DC.facilities;
+const cites = DC.cited_events.filter(e => typeof e.lat === 'number' && typeof e.lng === 'number');
+let charts = [];
+
+function cssv(name){ return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+function fmt(v,d){ return (v==null?'':Number(v).toFixed(d==null?1:d)); }
+function hexToRgb(h){ h=h.replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function alpha(hex,a){ const c=hexToRgb(hex); return 'rgba('+c[0]+','+c[1]+','+c[2]+','+a+')'; }
+function mix(h1,h2,t){ const a=hexToRgb(h1),b=hexToRgb(h2); return 'rgb('+Math.round(a[0]+(b[0]-a[0])*t)+','+Math.round(a[1]+(b[1]-a[1])*t)+','+Math.round(a[2]+(b[2]-a[2])*t)+')'; }
+
+// --- projection + basemap (AlbersUSA + us-atlas, same as the Geography page) ---
+const STATES = topojson.feature(US_TOPO, US_TOPO.objects.states);
+const NATION = topojson.feature(US_TOPO, US_TOPO.objects.nation);
+const PROJ = d3.geoAlbersUsa().fitSize([960, 600], NATION);
+const PATH = d3.geoPath(PROJ);
+function statePaths(){ let s=''; STATES.features.forEach(f => { const d=PATH(f); if(d) s+='<path class="state" d="'+d+'"></path>'; }); return s; }
+
+// --- pan / zoom (markers counter-scaled to keep constant screen size) ---
+const ZOOM = {};
+function setupZoom(svgId){
+  const svg = document.getElementById(svgId);
+  const z = d3.zoom().scaleExtent([1,12]).extent([[0,0],[960,600]]).translateExtent([[0,0],[960,600]])
+    .on('start',()=>svg.classList.add('grabbing')).on('end',()=>svg.classList.remove('grabbing'))
+    .on('zoom',ev=>applyTransform(svgId, ev.transform));
+  d3.select(svg).call(z).on('dblclick.zoom', null);
+  ZOOM[svgId] = { behavior:z, transform:d3.zoomIdentity, circles:[] };
+}
+function applyTransform(svgId,t){
+  const st=ZOOM[svgId]; if(!st) return; st.transform=t;
+  const g=document.getElementById(svgId).querySelector('.zoomroot'); if(g) g.setAttribute('transform', t.toString());
+  st.circles.forEach(c => c.setAttribute('r', (+c.dataset.r / t.k).toFixed(3)));
+}
+function refreshZoom(svgId){
+  const st=ZOOM[svgId]; if(!st) return; const svg=document.getElementById(svgId);
+  st.circles = Array.from(svg.querySelectorAll('circle'));
+  d3.select(svg).call(st.behavior.transform, st.transform);
+}
+document.querySelectorAll('.zoomctl').forEach(ctl => {
+  const id=ctl.dataset.for;
+  ctl.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    const st=ZOOM[id]; if(!st) return; const sel=d3.select('#'+id).transition().duration(260);
+    if(b.dataset.z==='in') sel.call(st.behavior.scaleBy,1.6);
+    else if(b.dataset.z==='out') sel.call(st.behavior.scaleBy,1/1.6);
+    else sel.call(st.behavior.transform, d3.zoomIdentity);
+  }));
+});
+
+// --- sizing + color ---
+const CITED_GW_DEFAULT = 0.8;
+const citedGw = e => (e.mw ? e.mw/1000 : CITED_GW_DEFAULT);
+const MAXGW = Math.max(facs.reduce((m,f)=>Math.max(m,f.gw),0), cites.reduce((m,e)=>Math.max(m,citedGw(e)),0), 1);
+const rOf = gw => 1.8 + 15*Math.sqrt(Math.max(gw,0.02)/MAXGW);
+const CAP = DC.delay_gradient_cap_mo || 48;
+function delayColor(mo){ const t=Math.max(0,Math.min(1,(mo||0)/CAP)); return mix(cssv('--delay-lo'), cssv('--delay-hi'), t); }
+function facColor(f){ return f.status==='cancelled' ? cssv('--cancel') : delayColor(f.delay_mo); }
+function citeColor(e){ return e.status==='cancelled' ? cssv('--cancel') : cssv('--warning'); }
+
+let flt = 'all';           // all | delayed | cancelled | cited
+let phase = 'all';         // all | uc | planned
+let showPipes = true, showCited = true;
+function facPass(f){
+  if(flt!=='all' && flt!==f.status) return false;
+  if(phase!=='all' && (phase==='uc') !== !!f.uc) return false;
+  return true;
+}
+
+function buildMap(){
+  const svg = document.getElementById('map');
+  const pipeD = showPipes ? (PATH(PIPES) || '') : '';
+  const pts = [];
+  if(flt!=='cited'){
+    facs.forEach((f,i) => {
+      if(!facPass(f)) return;
+      const p = PROJ([f.lng, f.lat]); if(!p) return;
+      const r = rOf(f.gw).toFixed(2);
+      const cls = f.status==='cancelled' ? ' class="cancel"' : '';
+      pts.push('<circle data-i="'+i+'"'+cls+' data-r="'+r+'" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+r+
+               '" fill="'+facColor(f)+'" fill-opacity="'+(f.status==='cancelled'?0.85:0.72)+'"></circle>');
+    });
+  }
+  const cpts = [];
+  if(showCited || flt==='cited'){
+    cites.forEach((e,i) => {
+      const p = PROJ([e.lng, e.lat]); if(!p) return;
+      const r = rOf(citedGw(e)).toFixed(2);
+      cpts.push('<circle data-c="'+i+'" class="cited" data-r="'+r+'" cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="'+r+
+                '" fill="'+citeColor(e)+'" fill-opacity="0.9"></circle>');
+    });
+  }
+  svg.innerHTML = '<g class="zoomroot">' + statePaths() +
+    (pipeD ? '<path class="pipe" d="'+pipeD+'"></path>' : '') + pts.join('') + cpts.join('') + '</g>';
+  renderLegend(); renderSizeKey(); refreshZoom('map');
+}
+
+function renderLegend(){
+  document.getElementById('map-legend').innerHTML =
+    '<span class="item"><span class="gbar"></span>&nbsp;delay: &lt;3mo &rarr; '+CAP+'mo+</span>'+
+    '<span class="item"><span class="dot" style="background:'+cssv('--cancel')+'"></span>cancelled</span>'+
+    '<span class="item"><span class="dot ring" style="background:'+cssv('--cancel')+'"></span>cited (ringed &mdash; hover for source)</span>';
+}
+function renderSizeKey(){
+  const vals=[0.2,1,Math.max(2,Math.round(MAXGW))].filter((v,i,a)=>a.indexOf(v)===i && v<=MAXGW+0.01);
+  let inner='', x=4;
+  vals.forEach(v => { const r=rOf(v);
+    inner+='<circle cx="'+(x+r)+'" cy="20" r="'+r.toFixed(1)+'" fill="none" stroke="'+cssv('--muted')+'"></circle>';
+    inner+='<text x="'+(x+r)+'" y="38" text-anchor="middle" font-size="9" fill="'+cssv('--muted')+'">'+fmt(v)+'</text>';
+    x+=2*r+26; });
+  document.getElementById('sizekey').innerHTML='<span>Circle size (GW):</span><svg width="'+x+'" height="44">'+inner+'</svg>';
+}
+
+// tooltip via delegation (handles both model circles [data-i] and cited [data-c])
+(function(){
+  const svg=document.getElementById('map'), tip=document.getElementById('maptip'), wrap=svg.parentElement;
+  svg.addEventListener('mouseover', e => {
+    if(e.target.tagName!=='circle') return;
+    const ci=e.target.getAttribute('data-c');
+    if(ci!==null){
+      const c=cites[+ci]; const col=citeColor(c);
+      const when = c.status==='delayed' ? ((c.orig_date||'?')+' &rarr; '+(c.new_date||'later')) : (c.orig_date||'');
+      tip.innerHTML='<div class="t-co">'+c.project+'</div>'+
+        '<div class="t-sub">'+c.company+' &middot; '+[c.city,c.state].filter(Boolean).join(', ')+' <span style="color:var(--muted)">(approx)</span></div>'+
+        (c.mw?'<div><b>'+fmt(c.mw,0)+' MW</b> reported</div>':'')+
+        (when?'<div class="t-sub">'+when+'</div>':'')+
+        '<div class="t-tag" style="background:'+alpha(col,0.18)+';color:'+col+'">'+c.status.toUpperCase()+' &middot; cited</div>'+
+        '<div class="t-sub" style="margin-top:4px">'+c.source+' &middot; '+c.pub_date+'</div>';
+    } else {
+      const f=facs[+e.target.getAttribute('data-i')]; const col=facColor(f);
+      tip.innerHTML='<div class="t-co">'+(f.co||'Unknown operator')+'</div>'+
+        '<div class="t-sub">'+[f.city,f.st].filter(Boolean).join(', ')+'</div>'+
+        '<div><b>'+fmt(f.gw,2)+' GW</b> (Planned+UC) &middot; '+(f.uc?'under construction':'planned')+'</div>'+
+        '<div class="t-sub">originally '+f.orig+(f.status==='cancelled'?' &rarr; cancelled / indefinite':(' &rarr; '+(f.rev||'later')+' &middot; '+fmt(f.delay_mo,0)+' mo late'))+'</div>'+
+        '<div class="t-tag" style="background:'+alpha(col,0.18)+';color:'+col+'">'+f.status.toUpperCase()+'</div>';
+    }
+    tip.style.opacity=1;
+  });
+  svg.addEventListener('mousemove', e => {
+    if(tip.style.opacity=='0') return; const b=wrap.getBoundingClientRect();
+    let x=e.clientX-b.left+12, y=e.clientY-b.top+12; if(x>b.width-256) x=e.clientX-b.left-248;
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  });
+  svg.addEventListener('mouseout', e => { if(e.target.tagName==='circle') tip.style.opacity=0; });
+})();
+
+document.querySelectorAll('#map-controls button[data-flt]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#map-controls button[data-flt]').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); flt=b.dataset.flt; buildMap();
+}));
+document.querySelectorAll('#map-controls button[data-phase]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#map-controls button[data-phase]').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); phase=b.dataset.phase; buildMap();
+}));
+document.querySelectorAll('#map-controls button[data-toggle]').forEach(b => b.addEventListener('click', () => {
+  b.classList.toggle('active');
+  if(b.dataset.toggle==='pipes') showPipes=b.classList.contains('active');
+  else showCited=b.classList.contains('active');
+  buildMap();
+}));
+
+// --- KPIs ---
+function buildKpis(){
+  const t=DC.totals_gw, n=DC.n_sites;
+  const tiles=[
+    {cls:'delayed', label:'Delayed (orig. 2026–28)', val:fmt(t.delayed,1), unit:'GW', note:n.delayed+' sites · median '+fmt(DC.delay_stats.median_mo,0)+' mo late'},
+    {cls:'cancelled', label:'Cancelled / indefinite', val:fmt(t.cancelled,1), unit:'GW', note:n.cancelled+' model sites + '+cites.filter(c=>c.status==='cancelled').length+' cited'},
+    {cls:'energy', label:'Energy deferred + lost', val:fmt(DC.twh.total,0), unit:'TWh/yr', note:'@ '+fmt(DC.intensity_twh_per_gw,2)+' TWh/GW'},
+    {cls:'sites', label:'Sites mapped', val:String(DC.n_facilities), unit:'', note:cites.length+' externally cited'},
+  ];
+  document.getElementById('kpis').innerHTML = tiles.map(t =>
+    '<div class="kpi '+t.cls+'"><div class="label">'+t.label+'</div><div class="val">'+t.val+' <span class="unit">'+t.unit+'</span></div><div class="note">'+t.note+'</div></div>').join('');
+}
+
+// --- histogram ---
+function buildHist(){
+  const b=DC.delay_stats.buckets, labels=Object.keys(b), data=labels.map(k=>b[k]);
+  const n=labels.length;
+  const colors=labels.map((k,i)=> k.indexOf('cancel')>=0 ? cssv('--cancel') : mix(cssv('--delay-lo'),cssv('--delay-hi'), i/(n-1)));
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+  charts.push(new Chart(document.getElementById('hist'), {
+    type:'bar', data:{labels, datasets:[{data, backgroundColor:colors, borderRadius:3, borderSkipped:false}]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{callbacks:{label:(i)=>i.raw+' sites'}} },
+      scales:{ x:{ticks:{color:muted,font:{size:11}},grid:{display:false},border:{color:cssv('--baseline')}},
+        y:{beginAtZero:true,ticks:{color:muted,font:{size:11}},grid:{color:grid},border:{display:false},title:{display:true,text:'# sites',color:muted,font:{size:11}}} } }
+  }));
+  document.getElementById('hist-take').innerHTML =
+    'Median slip is <b>'+fmt(DC.delay_stats.median_mo,0)+' months</b> (longest '+fmt(DC.delay_stats.max_mo,0)+' mo). '+
+    'The reddest sites &mdash; and every cancelled one &mdash; are the capacity that no longer lands anywhere near its original 2026&ndash;28 window.';
+}
+
+// --- shortfall effect: does the slip contest the "under construction" line? ---
+function buildShortfall(){
+  const rec=DATA.reconciliation, sf=DC.shortfall_split;
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+  const good=cssv('--good'), del=cssv('--delay-hi'), can=cssv('--cancel');
+  charts.push(new Chart(document.getElementById('shortfall'), {
+    type:'bar',
+    data:{labels:['Under construction','Planned'], datasets:[
+      {label:'Lands by 2028', data:[sf.uc.by2028, sf.planned.by2028], backgroundColor:good, stack:'s', borderWidth:0},
+      {label:'Slips past 2028', data:[sf.uc.past2028, sf.planned.past2028], backgroundColor:del, stack:'s', borderWidth:0},
+      {label:'Cancelled / indefinite', data:[sf.uc.cancelled, sf.planned.cancelled], backgroundColor:can, stack:'s', borderWidth:0},
+    ]},
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=> (i.raw>0.01? i.dataset.label+': '+fmt(i.raw,1)+' GW':null)}} },
+      scales:{ x:{stacked:true,beginAtZero:true,ticks:{color:muted},grid:{color:grid},border:{display:false},title:{display:true,text:'GW (originally due 2026–28)',color:muted}},
+        y:{stacked:true,ticks:{color:muted,font:{size:12}},grid:{display:false},border:{color:cssv('--baseline')}} } }
+  }));
+  const ucLeaves = sf.uc.past2028 + sf.uc.cancelled;                 // UC that actually leaves the window
+  const plLeaves = sf.planned.past2028 + sf.planned.cancelled;       // Planned that leaves the window
+  document.getElementById('verdict-tag').innerHTML =
+    '<span style="font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;vertical-align:2px;background:'+alpha(good,0.16)+';color:'+good+';border:1px solid '+alpha(good,0.4)+'">No — the UC line holds</span>';
+  document.getElementById('short-take').innerHTML =
+    '<b>No &mdash; these numbers don’t contest the ~15 GW under-construction assumption; if anything they support it.</b> '+
+    'The model shows <b>'+fmt(rec.model_us_uc,1)+' GW</b> of US capacity under construction (more than the <b>'+fmt(rec.client_uc,1)+' GW</b> the shortfall credits), and of the UC originally due 2026&ndash;28, <b>'+fmt(sf.uc.by2028,1)+' GW still lands by 2028</b> &mdash; only <b>'+fmt(sf.uc.past2028,2)+' GW</b> slips past the window and <b>none</b> is cancelled. '+
+    'The delays and cancellations fall almost entirely on <b>Planned (paper) capacity</b>: <b>'+fmt(sf.planned.past2028,1)+' GW</b> pushed past 2028 plus <b>'+fmt(sf.planned.cancelled,1)+' GW</b> cancelled (&asymp; '+fmt(plLeaves,0)+' GW leaving the window vs just '+fmt(ucLeaves,1)+' GW of UC). '+
+    'The waterfall never credited that planned capacity, so the <b>37.7 GW shortfall stands</b> &mdash; what erodes is the supply model’s apparent <i>surplus</i> over it (page 1’s ~6&times; &ldquo;coverage&rdquo; from a 228 GW planned pipeline), not the shortfall itself.';
+}
+
+// --- cited table + macro ---
+function buildCiteTable(){
+  const rows=DC.cited_events.map(e=>{
+    const cap = e.mw ? (e.mw>=1000? (e.mw/1000).toFixed(e.mw%1000?1:0)+' GW' : e.mw+' MW') : '—';
+    const when = e.status==='delayed' ? ((e.orig_date||'?')+' → '+(e.new_date||'later')) : (e.orig_date||'—');
+    return '<tr>'+
+      '<td class="proj"><a href="'+e.url+'" target="_blank" rel="noopener">'+e.project+'</a>'+
+        '<div class="loc">'+e.company+' · '+[e.city,e.state].filter(Boolean).join(', ')+'</div></td>'+
+      '<td><span class="pill '+e.status+'">'+e.status.toUpperCase()+'</span></td>'+
+      '<td>'+cap+'</td><td>'+when+'</td>'+
+      '<td>'+fmt(e.model_company_gw,1)+' GW</td>'+
+      '<td>'+e.source+'<div class="conf">'+e.pub_date+' · '+e.confidence+' conf.</div><div class="quote">“'+e.quote+'”</div></td>'+
+      '</tr>';
+  }).join('');
+  document.getElementById('cite-table').innerHTML =
+    '<table class="cites"><thead><tr><th>Project</th><th>Status</th><th>Reported size</th><th>Timeline</th><th>Model GW (operator)</th><th>Source</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+function buildMacro(){
+  document.getElementById('macro').innerHTML = DC.cited_macro.map(m =>
+    '<li><div class="mh">'+m.headline+'</div><div class="md">'+m.detail+'</div>'+
+    '<div class="ms"><a href="'+m.url+'" target="_blank" rel="noopener">'+m.source+'</a> · '+m.pub_date+' · '+m.confidence+' confidence</div></li>').join('');
+}
+
+function buildMapTake(){
+  const t=DC.totals_gw;
+  document.getElementById('map-take').innerHTML =
+    '<b>'+fmt(t.total,0)+' GW</b> of capacity originally slated for 2026&ndash;2028 is now cancelled ('+fmt(t.cancelled,1)+' GW) or delayed ('+fmt(t.delayed,1)+' GW). '+
+    'The externally-cited cancellations &mdash; a dense cluster in <b>Indiana</b> (Google, QTS, New Carlisle, Valparaiso, Hancock County) plus Virginia, Wisconsin, North Carolina and Texas &mdash; were mostly killed by local opposition <i>before</i> construction, so they never carried a live date in the model.';
+}
+
+function rebuild(){ charts.forEach(c=>c.destroy()); charts=[]; buildMap(); buildHist(); buildShortfall(); }
+document.getElementById('src-line').textContent =
+  'Source: ' + DATA.meta.model_file + ' (NA Data Center Supply, US, original online 2026–2028) · model as of ' + DATA.meta.model_asof + ' · external cancellations/delays cited inline.';
+setupZoom('map');
+buildKpis(); buildMap(); buildHist(); buildShortfall(); buildMapTake(); buildCiteTable(); buildMacro();
+if (window.matchMedia) { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rebuild); }
+</script>
+</body>
+</html>

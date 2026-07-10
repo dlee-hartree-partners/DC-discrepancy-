@@ -1,10 +1,10 @@
 # DC Discrepancy Dashboards
 
-Six cross-linked dashboard pages built from three data-center workbooks:
+Eight cross-linked dashboard pages built from three data-center workbooks:
 
 | Source | File | Key tabs |
 |--------|------|----------|
-| Client / demand | `Client_Intelligence Factory Anaysis_June11_2026 (1) - v2.xlsx` | `US Shortfall Analysis`, `Power Summary`, `Compute Demand`, `AI Power_US` |
+| Client / demand | `Client_Intelligence Factory Anaysis_June11_2026 (1) - v2.xlsx` | `US Shortfall Analysis`, `Power Summary`, `Compute Demand`, `AI Power_US`, `AI Power_Global` |
 | Supply model | `AI-Data-Center-Model-CLIENT-April-7-noSKU.xlsx` | `NA Data Center Supply`, `Hyperscalers & Neoclouds`, `Power Requirements per Chip`, `AI CPU Demand calculations` |
 | MS Nvidia server model | `Request_NV AI Server Model_052126 2.xlsx` | `ODM share analysis`, `GB200-300 Tracker`, `GPU Roadmap`, `Nvidia Rack Layout` |
 
@@ -44,6 +44,40 @@ Pipeline-proximity bucket (hover to isolate); (2) a **zoomable circle-pack** of 
 (3) a **streamgraph** of capacity by deployment type over time (annual/quarterly toggle); (4) a **beeswarm** of
 facilities placed by go-live year, radius ∝ GW, colored by deployment type.
 
+**Page 7 (`chippower_dashboard.html`):** the **GW and TWh needed by the chips themselves**, drawn from the
+*demand-side* workbooks only (client + MS Nvidia, not the supply model): (1) global chip **server power by vendor
+family** (Nvidia / AMD / Intel / Google TPU / AWS / custom), 2021–2028, from `AI Power_Global`
+(volume × per-server Max Input Power); (2) **cumulative chip DC power capacity (GW), global vs US** (122 GW global /
+69 GW US by 2028); (3) **energy (TWh)** — actual installed-fleet vs incremental new-chip load, global & US
+(802 / 455 TWh in 2028); (4) the per-chip driver — **watts per accelerator** (`GPU Roadmap`) and **kW per NVL72 rack**
+(`Nvidia Rack Layout`).
+
+**Page 8 (`delayed_dashboard.html`):** the **cancelled / delayed** cut, scoped to sites whose *original* online
+date (`NA Data Center Supply` col BY, "Start of operations") fell in **2026–2028** — plotted on the same **offline
+zoomable US map** the Geography page uses (d3-geo AlbersUSA + us-atlas, with the faint EIA gas-pipeline network as
+basemap). The model has *no* status flag, so status is derived from the model's *Live Date* (col CC): **cancelled**
+= a far-future sentinel (≥2034) or blank while capacity is still planned → drawn **red**; **delayed** = the live
+date slips >3 months past the original → drawn on a **yellow→red gradient** by the length of the slip. Because most
+real cancellations were killed *pre-construction* by local opposition (so the model never carried them), **externally
+-reported, cited** cancellations/delays are overlaid as **ringed markers** (hover for the source) — including a
+cluster in **Indiana** (Google Franklin Township, the New Carlisle rejection, QTS Porter County, Agincourt
+Valparaiso, Surge/Hancock County) plus PW Digital Gateway VA, Microsoft Caledonia WI, Tract Mooresville NC, AWS
+Becker MN, Crusoe "Project Jade" WY, Oracle/OpenAI Abilene TX, and STACK/Oracle "Project Jupiter" NM (→2029). In the
+2026–28 cohort the model shows **~140 GW delayed** (median 10.6-month slip) and **~27 GW cancelled/indefinite**;
+that GW is translated to **energy** at the model's own **~8.4 TWh per GW-year** (8760h × 75% utilization × PUE 1.28
+— the "GW-hours → TWh" / **Chip TWh/GW** intensity used on pages 3 & 7): ~1,177 TWh/yr deferred + ~229 TWh/yr lost.
+The map filters by status (delayed / cancelled / cited) and by **phase — Under Construction vs Planned** (col BV vs
+CD). A **shortfall-effect** card asks whether any of this contests the client waterfall's "under construction" line
+(demand 67.6 − DC UC 14.9 − grid 15.0 = **37.7 GW** shortfall) — and the answer is **no**: of the UC originally due
+2026–28, **19.0 GW still lands by 2028** and only **0.66 GW slips past** it (none cancelled), and the model shows
+**26.3 GW** of US UC total, *more* than the 14.9 GW credited. The slip is almost entirely in **Planned (paper)
+capacity** — **92.0 GW pushed past 2028 + 27.2 GW cancelled** — which the waterfall never counted, so the 37.7 GW
+shortfall stands; what erodes is the supply model's apparent *surplus* over it (page 1's ~6× "coverage" from a
+228 GW planned pipeline). Also a delay-length histogram, a **cited table** with source
+links, and macro pullbacks (Baird's ~25 US cancellations in 2025 — Indiana ~8 / ~5 GW; Microsoft ~200 MW leases /
+TD Cowen; AWS / Wells Fargo; Data Center Watch's $130B/75+ blocked in Q1 2026), with a SemiAnalysis caveat on the
+disputed "half of 2026 is cancelled" claim.
+
 ## Run
 
 ```bash
@@ -59,6 +93,8 @@ This reads the three workbooks and writes:
 - **`synthesis_dashboard.html`** — delays, the race, and cross-file disagreements (page 4).
 - **`geo_dashboard.html`** — offline (zoomable) maps + GW-of-chips vs datacenter-capacity by deployment type (page 5).
 - **`flows_dashboard.html`** — four D3 views: Sankey, circle-pack, streamgraph, beeswarm (page 6).
+- **`chippower_dashboard.html`** — GW & TWh needed by the chips, global & US, from the client + MS files (page 7).
+- **`delayed_dashboard.html`** — map of cancelled / delayed sites (original online 2026–28) and their GW / TWh impact, with cited sources (page 8).
 - **`dashboard_data.json`** — all extracted + reconciled figures.
 
 All pages are self-contained and work offline (Chart.js inlined; pages 5–6 also inline the full
@@ -116,9 +152,11 @@ from the expected values.
 | `synthesis_template.html` | Page 4 template (verdicts, delays, discrepancies) |
 | `geo_template.html` | Page 5 template (offline zoomable maps + by-deployment-type charts) |
 | `flows_template.html` | Page 6 template (Sankey, circle-pack, streamgraph, beeswarm) |
+| `chippower_template.html` | Page 7 template (chip GW/TWh demand: global & US, per-chip driver) |
+| `delayed_template.html` | Page 8 template (cancelled/delayed US map — original-2026–28 sites, GW & TWh impact, cited sources) |
 | `vendor/chart.umd.js` | Vendored Chart.js v4 (inlined for offline use) |
 | `vendor/d3.min.js` | Vendored full D3 v7 (geo, zoom, force, hierarchy…; inlined into pages 5–6) |
 | `vendor/d3-sankey.min.js` | Vendored d3-sankey plugin (inlined into page 6) |
 | `vendor/topojson-client.min.js`, `vendor/us-states-10m.json` | topojson + US states TopoJSON (inlined into page 5) |
 | `vendor/us-gas-pipelines.json` | EIA natural-gas pipeline network, simplified to 2dp (inlined into page 5; also used to compute per-facility pipeline distance) |
-| `dashboard.html` / `chips_dashboard.html` / `compute_dashboard.html` / `synthesis_dashboard.html` / `geo_dashboard.html` / `flows_dashboard.html` / `dashboard_data.json` | Generated output |
+| `dashboard.html` / `chips_dashboard.html` / `compute_dashboard.html` / `synthesis_dashboard.html` / `geo_dashboard.html` / `flows_dashboard.html` / `chippower_dashboard.html` / `delayed_dashboard.html` / `dashboard_data.json` | Generated output |

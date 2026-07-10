@@ -33,6 +33,8 @@ COMPUTE_TEMPLATE_FILE = os.path.join(HERE, "compute_template.html")
 SYNTHESIS_TEMPLATE_FILE = os.path.join(HERE, "synthesis_template.html")
 GEO_TEMPLATE_FILE = os.path.join(HERE, "geo_template.html")
 FLOWS_TEMPLATE_FILE = os.path.join(HERE, "flows_template.html")
+CHIPPOWER_TEMPLATE_FILE = os.path.join(HERE, "chippower_template.html")
+DELAYED_TEMPLATE_FILE = os.path.join(HERE, "delayed_template.html")
 
 # Offline D3 / map assets (vendored, inlined into the geo + flows pages like Chart.js).
 VENDOR_D3 = os.path.join(HERE, "vendor", "d3.min.js")            # full D3 v7 (geo, zoom, force, ...)
@@ -48,6 +50,8 @@ OUT_COMPUTE_HTML = os.path.join(HERE, "compute_dashboard.html")
 OUT_SYNTHESIS_HTML = os.path.join(HERE, "synthesis_dashboard.html")
 OUT_GEO_HTML = os.path.join(HERE, "geo_dashboard.html")
 OUT_FLOWS_HTML = os.path.join(HERE, "flows_dashboard.html")
+OUT_CHIPPOWER_HTML = os.path.join(HERE, "chippower_dashboard.html")
+OUT_DELAYED_HTML = os.path.join(HERE, "delayed_dashboard.html")
 
 
 def col(letter):
@@ -368,22 +372,107 @@ def extract_capacity_by_deploy(wb):
 
 
 def extract_ai_power_us(wb):
-    """Client 'AI Power_US': US chip-driven Data Center Power Capacity (GW), 2023-2028.
+    """Client 'AI Power_US': US chip-driven power/energy demand, 2023-2028.
 
-    Row located by label (robust to drift). Year values sit in cols G/K/O/S/W/AA.
+    Rows located by label (robust to drift). Year values sit in cols G/K/O/S/W/AA.
+    Returns Data Center Power Capacity (GW), chip server power (GW), and TWh
+    (incremental + actual-for-year).
     """
     g = _grid(wb["AI Power_US"], 60, col("AB") + 1)
     years = [2023, 2024, 2025, 2026, 2027, 2028]
     ycols = [col(c) for c in ("G", "K", "O", "S", "W", "AA")]
-    cap = None
-    for r in range(5, 40):
-        lab = g.get((r, col("E")))
-        if isinstance(lab, str) and lab.strip().lower().startswith("data center power capacity"):
-            cap = [round(num(g.get((r, c))), 3) for c in ycols]
-            break
+
+    def find(pred, scale=1.0, nd=3):
+        for r in range(5, 40):
+            lab = g.get((r, col("E")))
+            if isinstance(lab, str) and pred(lab.strip().lower()):
+                return [round(num(g.get((r, c))) * scale, nd) for c in ycols]
+        return None
+
+    cap = find(lambda s: s.startswith("data center power capacity"))
     if cap is None:
         raise SystemExit("Could not locate 'Data Center Power Capacity (GW)' in AI Power_US")
-    return {"years": years, "dc_power_gw": cap}
+    servers_gw = find(lambda s: s.startswith("total power consumption from servers"), scale=1/1000.0)
+    twh_incr = find(lambda s: s.startswith("twh - incremental"))
+    twh_actual = find(lambda s: s.startswith("twh - actual"))
+    return {"years": years, "dc_power_gw": cap, "servers_gw": servers_gw,
+            "twh_incr": twh_incr, "twh_actual": twh_actual}
+
+
+# Vendor families for the global chip-power breakdown (order = keyword priority).
+def _chip_family(gen):
+    g = gen.lower()
+    if any(k in g for k in ("china", "ascend", "maia", "bytedance", "meta", "openai", "microsoft", "xai")):
+        return "Other / custom"
+    if "trainium" in g or "inferentia" in g:
+        return "AWS"
+    if "tpu" in g or "ironwood" in g or "mediatek" in g or g[:2] in ("v7", "v8") or g.startswith("n+"):
+        return "Google TPU"
+    if any(k in g for k in ("gaudi", "falcon", "intel")):
+        return "Intel"
+    if g.startswith("mi") or "amd" in g:
+        return "AMD"
+    if any(k in g for k in ("h100", "a100", "b100", "r100", "r+", "other gpu", "nvda", "nvidia")):
+        return "Nvidia"
+    return "Other / custom"
+
+
+FAMILY_ORDER = ["Nvidia", "AMD", "Intel", "Google TPU", "AWS", "Other / custom"]
+
+
+def extract_chip_power_global(wb):
+    """Client 'AI Power_Global': GW of chip power by vendor family (server power),
+    global DC power capacity (GW, incl PUE) and TWh, 2021-2028.
+
+    The tab computes a per-generation power block (volume -> servers -> Max Input
+    Power (W) -> MW). We sum each generation's 'Total Server Power Consumption (MW)'
+    into vendor families, and read the tab's own summary GW/TWh rows.
+    """
+    ws = wb["AI Power_Global"]
+    rows = list(ws.iter_rows(min_row=1, max_row=422, values_only=True))
+    cB, cC = col("B"), col("C")
+    ycols = [col(c) for c in ("H", "I", "J", "K", "L", "M", "N", "O")]   # 2021..2028
+    years = list(range(2021, 2029))
+
+    def lbl(row):
+        for c in (cC, cB):
+            v = row[c] if c < len(row) else None
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        return ""
+
+    def vals(row, scale=1.0, nd=3):
+        return [round(num(row[i]) * scale, nd) if i < len(row) else 0.0 for i in ycols]
+
+    fam = {f: [0.0] * len(years) for f in FAMILY_ORDER}
+    cur = None
+    for row in rows:
+        L = lbl(row)
+        if L.endswith("Power Usage (MW)"):
+            cur = L[: -len("Power Usage (MW)")].strip()
+            continue
+        if cur and "Total Server Power Consumption (MW)" in L:
+            f = _chip_family(cur)
+            v = vals(row, scale=1 / 1000.0)          # MW -> GW
+            fam[f] = [a + b for a, b in zip(fam[f], v)]
+            cur = None
+
+    dc_power_gw = twh_incr = twh_actual = None
+    for row in rows:
+        L = lbl(row)
+        if L == "Data Center Power Capacity (GW)" and dc_power_gw is None:
+            dc_power_gw = vals(row)
+        elif L.startswith("TWh - Incremental"):
+            twh_incr = vals(row, nd=1)
+        elif L.startswith("TWh - Actual"):
+            twh_actual = vals(row, nd=1)
+    if dc_power_gw is None:
+        raise SystemExit("Could not locate global 'Data Center Power Capacity (GW)' in AI Power_Global")
+
+    families = [{"name": f, "values": [round(x, 3) for x in fam[f]]} for f in FAMILY_ORDER]
+    total_servers_gw = [round(sum(fam[f][i] for f in FAMILY_ORDER), 3) for i in range(len(years))]
+    return {"years": years, "families": families, "total_servers_gw": total_servers_gw,
+            "dc_power_gw": dc_power_gw, "twh_incr": twh_incr, "twh_actual": twh_actual}
 
 
 def derive_chips_by_deploy(ai_power_us, buildout):
@@ -928,6 +1017,332 @@ def extract_dashboard_adds(wb):
 
 
 # --------------------------------------------------------------------------- #
+# Cancelled & delayed sites (page 8)
+# --------------------------------------------------------------------------- #
+# The supply model carries NO status flag. "Cancelled/delayed" is therefore
+# DERIVED two ways, kept side by side:
+#   (a) in-model: each US facility's "Live Date - Quarter End" (col CC). Sites
+#       dated 2029-2033 are "delayed past 2028"; a far-future sentinel (>=2034,
+#       e.g. 2043/2099) is treated as "cancelled / indefinite".
+#   (b) external, CITED: specific projects publicly reported cancelled/delayed,
+#       with a source link. Named-site delay dates are rarely reported, so the
+#       delayed *magnitude* comes from (a); these citations name/ground it.
+# Every figure the user reads on this page is one or the other, both labeled.
+#
+# Sources verified/retrieved during the research pass (July 2026). Confidence is
+# noted; a few outlets (CNBC, Data Center Watch) 403'd and are corroborated via
+# the outlets listed. "match" is the Company-column value in the supply model so
+# the page can attach the model's own delayed+cancelled GW for that operator.
+# Externally-reported, individually-cited US projects (originals broadly slated
+# 2026-2028) that were cancelled or delayed. Coordinates are approximate city/
+# county centroids (labelled "approx" in the UI) unless a site coordinate was
+# published. Most local-opposition cancellations are NOT in the supply model
+# (they were killed pre-construction), which is why the model-derived layer under-
+# counts cancellations - these fill that gap. `match` = the operator's name in the
+# model's Company column, so the page can show that operator's in-model GW context.
+CITED_EVENTS = [
+    # --- Indiana (a wave of local-opposition cancellations) ---
+    {"company": "Google", "match": "Google",
+     "project": "Franklin Township ('Deep Meadows')", "city": "Indianapolis", "state": "IN",
+     "lat": 39.66, "lng": -86.00, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "high",
+     "source": "Data Center Dynamics / IBJ", "pub_date": "2025-09-22",
+     "url": "https://www.datacenterdynamics.com/en/news/google-withdraws-rezoning-proposal-for-468-acre-data-center-project-in-franklin-township-indianapolis/",
+     "quote": "Google withdrew its rezoning petition for the $1bn, 468-acre Franklin Township site after community pushback, pre-empting a council vote it was set to lose."},
+    {"company": "Undisclosed hyperscaler", "match": "",
+     "project": "New Carlisle 'third' campus (rezoning denied)", "city": "New Carlisle", "state": "IN",
+     "lat": 41.70, "lng": -86.51, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "high",
+     "source": "WSBT / WNDU / WVPE", "pub_date": "2025-12-10",
+     "url": "https://www.wndu.com/2025/12/10/st-joseph-county-council-meets-vote-data-center-proposal-new-carlisle/",
+     "quote": "St. Joseph County Council denied the rezoning 7-2 for a ~$12-13bn, ~1,000-acre campus near the AWS New Carlisle site after ~10 hours of opposition."},
+    {"company": "QTS", "match": "QTS",
+     "project": "Porter County campus (withdrawn)", "city": "Valparaiso (Union Twp)", "state": "IN",
+     "lat": 41.42, "lng": -87.18, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "high",
+     "source": "Data Center Dynamics", "pub_date": "2025-09-01",
+     "url": "https://www.datacenterdynamics.com/en/news/qts-cans-data-center-scheme-in-porter-county-indiana-after-protests/",
+     "quote": "QTS dropped its $2bn, ~800-acre Porter County scheme: 'the conditions proposed would be economically challenging.'"},
+    {"company": "Agincourt Investments", "match": "",
+     "project": "Valparaiso project (option released)", "city": "Valparaiso", "state": "IN",
+     "lat": 41.47, "lng": -87.06, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "high",
+     "source": "Data Center Dynamics", "pub_date": "2025-03-26",
+     "url": "https://www.datacenterdynamics.com/en/news/indianas-city-of-valparaiso-pulls-the-plug-on-agincourt-data-center-project/",
+     "quote": "'Agincourt has agreed to withdraw from the project and to release its option on the land' (Mayor Jon Costas)."},
+    {"company": "Surge Development", "match": "",
+     "project": "Hancock County MegaSite (withdrawn)", "city": "Greenfield", "state": "IN",
+     "lat": 39.79, "lng": -85.87, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "medium",
+     "source": "WTHR / IBJ", "pub_date": "2025-01-01",
+     "url": "https://www.wthr.com/article/money/business/application-withdrawn-surge-development-hancock-county-greenfield-data-center-tuttle-orchards/531-48204cbc-eba5-4666-bd66-6e88cb6d2412",
+     "quote": "Surge withdrew its ~775-acre Hancock County rezoning after opposition; it is now eyeing Henry County instead."},
+    # --- Other US cancellations ---
+    {"company": "QTS / Compass", "match": "QTS",
+     "project": "Prince William Digital Gateway (dead)", "city": "Gainesville/Manassas", "state": "VA",
+     "lat": 38.83, "lng": -77.55, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "high",
+     "source": "Virginia Business / WTOP / DCD", "pub_date": "2026-07-02",
+     "url": "https://virginiabusiness.com/prince-william-digital-gateway-data-center-project-officially-dies/",
+     "quote": "The ~2,100-acre, gigawatt-scale 'world's largest' campus 'is officially dead' after the last developer dropped its appeal and the zoning was ruled invalid."},
+    {"company": "Microsoft", "match": "Microsoft",
+     "project": "Caledonia site (rezoning withdrawn)", "city": "Caledonia (Racine Co.)", "state": "WI",
+     "lat": 42.80, "lng": -87.89, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "medium",
+     "source": "Racine County Eye / CNBC", "pub_date": "2025-10-08",
+     "url": "https://racinecountyeye.com/2025/10/08/microsoft-abandon-1st-caledonia/",
+     "quote": "Microsoft withdrew its Caledonia rezoning request; its separate $3.3bn Mount Pleasant campus continues (a later phase paused for redesign)."},
+    {"company": "Tract", "match": "Tract",
+     "project": "Mooresville Technology Park (withdrawn)", "city": "Mooresville (Iredell Co.)", "state": "NC",
+     "lat": 35.58, "lng": -80.81, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "high",
+     "source": "Data Center Dynamics / NBC News", "pub_date": "2025-09-15",
+     "url": "https://www.datacenterdynamics.com/en/news/tract-pulls-plans-for-north-carolina-data-center-on-land-formerly-owned-by-nascar-legend-dale-earnhardt/",
+     "quote": "Tract pulled its ~400-acre plan (on former Dale Earnhardt farmland) from the agenda after opposition, including from the Earnhardt family."},
+    {"company": "Oracle / OpenAI (Stargate)", "match": "Oracle",
+     "project": "Abilene 'Stargate' expansion (~600 MW)", "city": "Abilene (Taylor Co.)", "state": "TX",
+     "lat": 32.45, "lng": -99.73, "mw": 600, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "medium",
+     "source": "Bloomberg / Data Center Dynamics", "pub_date": "2026-03-06",
+     "url": "https://www.bloomberg.com/news/articles/2026-03-06/oracle-and-openai-end-plans-to-expand-flagship-data-center",
+     "quote": "Oracle and OpenAI ended plans for a ~600MW expansion of the Abilene flagship; the core ~1.2GW campus continues (Oracle disputes 'cancellation' framing)."},
+    {"company": "Crusoe", "match": "Crusoe",
+     "project": "Project Jade (Laramie Co., near Cheyenne)", "city": "Cheyenne", "state": "WY",
+     "lat": 41.14, "lng": -104.82, "mw": 1800, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "high",
+     "source": "Wyoming Tribune Eagle", "pub_date": "2026-06-09",
+     "url": "https://www.wyomingnews.com/news/local_news/crusoe-pulls-out-of-project-jade-data-center/article_b9a8bde9-21c0-4e8a-9051-9154b91bf0eb.html",
+     "quote": "Crusoe withdrew from the 1.8GW (scalable to 10GW) project; Tallgrass Energy is seeking a replacement tenant."},
+    {"company": "Digital Realty", "match": "Digital Realty",
+     "project": "2323 Bryan Street (downtown Dallas)", "city": "Dallas", "state": "TX",
+     "lat": 32.79, "lng": -96.79, "mw": None, "status": "cancelled",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "high",
+     "source": "The Real Deal", "pub_date": "2025-06-10",
+     "url": "https://therealdeal.com/texas/dallas/2025/06/10/digital-realty-cancels-104-million-dallas-data-center-project/",
+     "quote": "Data-center capacity expansion cancelled; investment cut ~87% ($104M -> $13M) citing 'unforeseen circumstances and technical challenges'."},
+    # --- Delays (originals 2026-2028 slipping) ---
+    {"company": "STACK Infrastructure / Oracle (Stargate)", "match": "STACK Infrastructure",
+     "project": "Project Jupiter (Dona Ana Co.)", "city": "Santa Teresa", "state": "NM",
+     "lat": 31.87, "lng": -106.63, "mw": 1000, "status": "delayed",
+     "orig_date": "1H2027", "new_date": "2029", "confidence": "high",
+     "source": "SemiAnalysis", "pub_date": "2026-06-18",
+     "url": "https://newsletter.semianalysis.com/p/stop-saying-half-of-2026-us-datacenter",
+     "quote": "'Our base case moved first power off 2027 entirely and out to 2029' - gas-pipeline permitting, a state right-of-way denial and FERC review."},
+    {"company": "Microsoft", "match": "Microsoft",
+     "project": "Mount Pleasant (former Foxconn) - Phase 2", "city": "Mount Pleasant (Racine Co.)", "state": "WI",
+     "lat": 42.72, "lng": -87.90, "mw": None, "status": "delayed",
+     "orig_date": "2026-2027", "new_date": None, "confidence": "high",
+     "source": "Data Center Dynamics", "pub_date": "2025-01-03",
+     "url": "https://www.datacenterdynamics.com/en/news/microsoft-pauses-construction-on-part-of-data-center-site-in-mount-pleasant-wisconsin/",
+     "quote": "'We have paused early construction work for this second phase while we evaluate scope and recent changes in technology.' Phase 1 continues."},
+    {"company": "Microsoft", "match": "Microsoft",
+     "project": "Licking County (New Albany / Heath / Hebron)", "city": "New Albany", "state": "OH",
+     "lat": 40.08, "lng": -82.81, "mw": None, "status": "cancelled",
+     "orig_date": "2025-2026", "new_date": None, "confidence": "high",
+     "source": "Data Center Dynamics", "pub_date": "2025-04-08",
+     "url": "https://www.datacenterdynamics.com/en/news/microsoft-backs-away-from-1bn-data-center-plans-in-licking-county-ohio/",
+     "quote": "Microsoft paused ~$1bn across three Licking County sites; two of the three reverted to farmland use."},
+    {"company": "Amazon / AWS", "match": "AWS",
+     "project": "Becker (former Sherco site) - suspended", "city": "Becker (Sherburne Co.)", "state": "MN",
+     "lat": 45.38, "lng": -93.88, "mw": None, "status": "delayed",
+     "orig_date": "2026-2028 (implied)", "new_date": None, "confidence": "medium",
+     "source": "Star Tribune / Data Center Dynamics", "pub_date": "2025-05-01",
+     "url": "https://www.datacenterdynamics.com/en/news/amazon-web-services-suspends-plans-for-minnesota-data-center/",
+     "quote": "Amazon suspended its Becker plan amid a fight over Minnesota's data-center tax exemption and a backup-generator permit ruling."},
+]
+
+# Portfolio / analyst-level pullbacks (aggregate, not tied to one site).
+CITED_MACRO = [
+    {"headline": "~25 US data-center projects cancelled in 2025 (vs 6 in 2024); Indiana ~8, ~5 GW",
+     "detail": "Cancellations roughly quadrupled year-on-year on power/water limits and local opposition; Indiana tied Virginia for the most (~8 each), with a reported ~5 GW cancelled in Indiana alone.",
+     "source": "Gizmodo / Heatmap (Baird)", "pub_date": "2025", "confidence": "medium",
+     "url": "https://gizmodo.com/data-center-project-cancellations-quadrupled-in-2025-as-locals-fight-back-2000709669"},
+    {"headline": "Microsoft: ~200 MW of US leases cancelled, up to ~2 GW deferred (US+Europe)",
+     "detail": "TD Cowen: ~200MW of US colocation leases cancelled (Feb 2025) with at least two private operators, rising to up to 2GW deferred/cancelled plus >1GW of expired LOIs. Microsoft says it stays 'well positioned to meet increasing demand'.",
+     "source": "Data Center Dynamics / TechCrunch (TD Cowen)", "pub_date": "2025-02-25", "confidence": "high",
+     "url": "https://www.datacenterdynamics.com/en/news/microsoft-cancels-200mw-of-ai-data-center-leases-report/"},
+    {"headline": "AWS: paused a portion of colocation leasing",
+     "detail": "Wells Fargo: AWS paused some colocation leasing discussions ('particularly international ones'); signed leases were not cancelled. AWS calls it 'routine capacity management'.",
+     "source": "CNBC / Data Center Dynamics (Wells Fargo)", "pub_date": "2025-04-21", "confidence": "high",
+     "url": "https://www.cnbc.com/2025/04/21/amazon-has-paused-some-data-center-lease-commitments-wells-fargo.html"},
+    {"headline": "$130B / 75+ US buildouts blocked or delayed in Q1 2026",
+     "detail": "Data Center Watch: more than 75 projects worth ~$130bn blocked or delayed in the first four months of 2026 amid bipartisan local opposition over power and water costs.",
+     "source": "Tom's Hardware / Fortune (Data Center Watch)", "pub_date": "2026", "confidence": "medium",
+     "url": "https://www.tomshardware.com/tech-industry/artificial-intelligence/more-than-75-data-center-build-outs-worth-usd130-billion-have-been-successfully-blocked-in-the-first-four-months-of-2026-bipartisan-opposition-mounts-nationwide-over-fears-of-soaring-power-and-water-costs"},
+    {"headline": "Caveat: 'more than half of 2026 US DCs cancelled/delayed' is disputed",
+     "detail": "SemiAnalysis argues the 'half of 2026 capacity is cancelled' framing is a denominator error - its own year-end 2026 NA self-build forecast moved only ~1% (colo <5%). Much of the slip is delay (e.g. an electrical-gear shortage), not demand collapse.",
+     "source": "SemiAnalysis", "pub_date": "2026-06-18", "confidence": "medium",
+     "url": "https://newsletter.semianalysis.com/p/stop-saying-half-of-2026-us-datacenter"},
+]
+
+
+DELAY_MIN_MONTHS = 3.0        # a slip must exceed this to count as "delayed"
+DELAY_GRADIENT_CAP = 48.0     # months mapped to the reddest end of the yellow->red scale
+
+
+def extract_delayed_cancelled(wb, utilization, pue_2028):
+    """US facilities whose ORIGINAL online date (col BY, 'Start of operations')
+    fell in 2026-2028, that are now cancelled or delayed in the model.
+
+    Scope is exactly the 2026-2028 original cohort (the user's ask). Within it:
+      * cancelled - model Live Date (col CC) is a far-future sentinel (>=2034) or
+        blank while capacity is still planned  -> plotted RED on the map.
+      * delayed   - CC lands more than DELAY_MIN_MONTHS after BY -> plotted on a
+        yellow->red gradient scaled by the slip in months.
+    Each facility carries lat/lng (cols CN/CO) so the page can draw them on the
+    same offline US map the geography page uses. Energy uses the SAME conversion
+    as derive_energy_split (8760h x utilization x PUE) so TWh reconciles with
+    pages 3 & 7. Externally-reported, cited events (CITED_EVENTS) are merged in
+    as a separate labelled layer - including sites the model does not carry.
+    """
+    import datetime
+    ws = wb["NA Data Center Supply"]
+    cA, cCountry = col("A"), col("CT")
+    cCE, cCD, cBV, cBY, cCC = col("CE"), col("CD"), col("BV"), col("BY"), col("CC")
+    cLat, cLng = col("CN"), col("CO")
+    cCompany, cState, cCity, cType = col("CV"), col("CP"), col("CQ"), col("CX")
+    maxcol = max(cA, cCountry, cCE, cCD, cBV, cBY, cCC, cLat, cLng, cCompany, cState, cCity, cType)
+
+    intensity = round(HOURS_PER_YEAR * utilization * pue_2028 / 1000.0, 3)  # TWh per GW-yr
+
+    facilities = []
+    tot = {"delayed": 0.0, "cancelled": 0.0}
+    n = {"delayed": 0, "cancelled": 0}
+    # capacity split into committed (Under Construction, col BV) vs paper (Planned, col CD);
+    # CE == BV + CD in this sheet, so uc + planned reconciles to the class total.
+    by_phase = {"delayed": {"uc": 0.0, "planned": 0.0},
+                "cancelled": {"uc": 0.0, "planned": 0.0}}
+    # For the shortfall test: does the slip actually remove capacity the client's
+    # waterfall counts on? Split UC vs Planned by whether the REVISED live date
+    # still lands in-window (<=2028), slips past 2028, or is cancelled.
+    sf = {"uc": {"by2028": 0.0, "past2028": 0.0, "cancelled": 0.0},
+          "planned": {"by2028": 0.0, "past2028": 0.0, "cancelled": 0.0}}
+    by_company = {}
+    buckets = {"3-6 mo": 0, "6-12 mo": 0, "1-2 yr": 0, "2-4 yr": 0, ">4 yr / cancelled": 0}
+    delays = []
+    n_no_coord = 0
+
+    def yof(v):
+        return v.year if isinstance(v, datetime.datetime) else None
+
+    for row in ws.iter_rows(min_row=6, values_only=True):
+        if len(row) <= maxcol:
+            continue
+        a = row[cA]
+        if not (isinstance(a, str) and len(a) >= 8 and "-" in a):
+            continue
+        country = row[cCountry]
+        if not (isinstance(country, str) and country.strip().upper() in ("USA", "US", "UNITED STATES")):
+            continue
+        by = row[cBY]
+        if yof(by) not in (2026, 2027, 2028):              # scope: ORIGINAL online 2026-2028
+            continue
+        gw = num(row[cCE]) / 1000.0                        # Planned+UC, MW->GW
+        uc_gw = num(row[cBV]) / 1000.0                      # Under Construction (col BV)
+        planned_gw = num(row[cCD]) / 1000.0                 # Planned (col CD); CE == BV + CD
+        cc = row[cCC]
+        ccyr = yof(cc)
+
+        # classify
+        if (ccyr is not None and ccyr >= 2034) or (ccyr is None and num(row[cCD]) > 0):
+            status, delay_mo = "cancelled", None
+        elif isinstance(cc, datetime.datetime) and isinstance(by, datetime.datetime):
+            dm = (cc - by).days / 30.44
+            if dm <= DELAY_MIN_MONTHS:
+                continue                                   # on-time / trivial slip -> not shown
+            status, delay_mo = "delayed", round(dm, 1)
+        else:
+            continue
+        if gw <= 0 and status == "delayed":
+            continue
+
+        lat, lng = row[cLat], row[cLng]
+        if not (isinstance(lat, (int, float)) and isinstance(lng, (int, float))):
+            n_no_coord += 1
+            continue
+
+        co = row[cCompany].strip() if isinstance(row[cCompany], str) else "Unknown"
+        st = row[cState].strip() if isinstance(row[cState], str) else ""
+        city = row[cCity].strip() if isinstance(row[cCity], str) else ""
+        tot[status] += gw
+        n[status] += 1
+        by_phase[status]["uc"] += uc_gw
+        by_phase[status]["planned"] += planned_gw
+        if status == "cancelled":
+            bucket = "cancelled"
+        else:
+            bucket = "past2028" if (ccyr and ccyr >= 2029) else "by2028"
+        sf["uc"][bucket] += uc_gw
+        sf["planned"][bucket] += planned_gw
+        by_company[co] = by_company.get(co, 0.0) + gw
+        if status == "cancelled":
+            buckets[">4 yr / cancelled"] += 1
+        else:
+            delays.append(delay_mo)
+            if delay_mo < 6:
+                buckets["3-6 mo"] += 1
+            elif delay_mo < 12:
+                buckets["6-12 mo"] += 1
+            elif delay_mo < 24:
+                buckets["1-2 yr"] += 1
+            elif delay_mo < 48:
+                buckets["2-4 yr"] += 1
+            else:
+                buckets[">4 yr / cancelled"] += 1
+        facilities.append({
+            "lat": round(float(lat), 4), "lng": round(float(lng), 4),
+            "co": co, "city": city, "st": st,
+            "gw": round(gw, 4), "orig": yof(by), "rev": ccyr,
+            "delay_mo": delay_mo, "status": status,
+            "uc": uc_gw > 0,                                # committed (Under Construction) vs Planned
+        })
+
+    def r3(v):
+        return round(v, 3)
+
+    facilities.sort(key=lambda f: -f["gw"])                # small circles drawn on top
+    delays.sort()
+    ndel = len(delays)
+
+    def top(d, k=12):
+        return [{"name": kk, "gw": r3(vv)} for kk, vv in sorted(d.items(), key=lambda x: -x[1])[:k]]
+
+    # cited events: keep only those in scope (original 2026-2028) for the map layer;
+    # attach the model's operator-level delayed+cancelled GW as company-level context.
+    cited = []
+    for ev in CITED_EVENTS:
+        e = dict(ev)
+        e["model_company_gw"] = r3(by_company.get(ev.get("match", ""), 0.0))
+        cited.append(e)
+
+    return {
+        "scope": "US facilities with an original online date (Start of operations) in 2026-2028",
+        "facilities": facilities,
+        "n_facilities": len(facilities),
+        "n_no_coord": n_no_coord,
+        "totals_gw": {"delayed": r3(tot["delayed"]), "cancelled": r3(tot["cancelled"]),
+                      "total": r3(tot["delayed"] + tot["cancelled"])},
+        "by_phase": {k: {"uc": r3(v["uc"]), "planned": r3(v["planned"])} for k, v in by_phase.items()},
+        "uc_total_gw": r3(by_phase["delayed"]["uc"] + by_phase["cancelled"]["uc"]),
+        "planned_total_gw": r3(by_phase["delayed"]["planned"] + by_phase["cancelled"]["planned"]),
+        "shortfall_split": {ph: {k: r3(v) for k, v in d.items()} for ph, d in sf.items()},
+        "n_sites": n,
+        "delay_stats": {"median_mo": delays[ndel // 2] if ndel else None,
+                        "max_mo": delays[-1] if ndel else None,
+                        "buckets": buckets},
+        "delay_gradient_cap_mo": DELAY_GRADIENT_CAP,
+        "intensity_twh_per_gw": intensity,
+        "utilization": utilization, "pue_2028": pue_2028, "hours": HOURS_PER_YEAR,
+        "twh": {"delayed_deferred": r3(tot["delayed"] * intensity),
+                "cancelled_lost": r3(tot["cancelled"] * intensity),
+                "total": r3((tot["delayed"] + tot["cancelled"]) * intensity)},
+        "by_company": top(by_company),
+        "cited_events": cited,
+        "cited_macro": CITED_MACRO,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Derivations: energy split (TWh by chip class) and compute split (GPU vs ASIC)
 # --------------------------------------------------------------------------- #
 # Watts per volume row (Power Summary row number -> W per chip).
@@ -1181,8 +1596,9 @@ def render_html(data, template_file):
 def main():
     for p in (CLIENT_FILE, MODEL_FILE, NV_FILE, VENDOR_CHARTJS, TEMPLATE_FILE,
               CHIPS_TEMPLATE_FILE, COMPUTE_TEMPLATE_FILE, SYNTHESIS_TEMPLATE_FILE,
-              GEO_TEMPLATE_FILE, FLOWS_TEMPLATE_FILE, VENDOR_D3, VENDOR_SANKEY,
-              VENDOR_TOPOJSON, VENDOR_US_TOPO, VENDOR_PIPELINES):
+              GEO_TEMPLATE_FILE, FLOWS_TEMPLATE_FILE, CHIPPOWER_TEMPLATE_FILE,
+              DELAYED_TEMPLATE_FILE,
+              VENDOR_D3, VENDOR_SANKEY, VENDOR_TOPOJSON, VENDOR_US_TOPO, VENDOR_PIPELINES):
         if not os.path.exists(p):
             raise SystemExit(f"Missing required file: {p}")
 
@@ -1191,6 +1607,7 @@ def main():
     shortfall = extract_shortfall(client_wb)
     client_chips = extract_client_chips(client_wb)
     ai_power_us = extract_ai_power_us(client_wb)
+    chip_power_global = extract_chip_power_global(client_wb)
     client_wb.close()
 
     print("Extracting model file (supply + buildout + chip watts) ...")
@@ -1209,6 +1626,8 @@ def main():
     revisions = extract_revisions(model_wb)
     slippage = extract_slippage(model_wb)
     dash_adds = extract_dashboard_adds(model_wb)
+    delayed_cancelled = extract_delayed_cancelled(
+        model_wb, client_chips["utilization"], client_chips["pue"][-1])
     model_wb.close()
 
     print("Extracting NV server model (chips, racks, customers) ...")
@@ -1232,6 +1651,13 @@ def main():
          sum(cap_by_deploy["annual"][k][cap_by_deploy["years"].index(2028)]
              for k in ("selfbuilt", "leasing", "neocloud")),
          supply["year_series_gw"]["total"][supply["years"].index(2028)], 0.5),
+        ("Global chip DC power 2028 = 122 GW", chip_power_global["dc_power_gw"][-1], 122.0, 1.0),
+        ("Global chip TWh actual 2028 = 801.6", chip_power_global["twh_actual"][-1], 801.6, 1.0),
+        ("Global chip server power 2028 ~= 25.5 GW", chip_power_global["total_servers_gw"][-1], 25.5, 2.0),
+        ("delayed (orig 2026-28) GW ~= 139.9", delayed_cancelled["totals_gw"]["delayed"], 139.9, 3.0),
+        ("cancelled (orig 2026-28) GW ~= 27.2", delayed_cancelled["totals_gw"]["cancelled"], 27.2, 3.0),
+        ("mapped facilities (orig 2026-28) ~= 855",
+         delayed_cancelled["n_facilities"], 855, 15),
     ]
     self_check(shortfall, supply, nv, buildout, client_chips, extra)
 
@@ -1251,6 +1677,8 @@ def main():
                           "dash_adds": dash_adds},
             "geo": {"facilities": geo, "capacity_by_deploy": cap_by_deploy,
                     "chips_by_deploy": chips_by_deploy, "ai_power_us": ai_power_us},
+            "chippower": {"global": chip_power_global, "us": ai_power_us},
+            "delayed_cancelled": delayed_cancelled,
             "meta": {
                 "client_file": os.path.basename(CLIENT_FILE),
                 "model_file": os.path.basename(MODEL_FILE),
@@ -1279,6 +1707,12 @@ def main():
 
     with open(OUT_FLOWS_HTML, "w", encoding="utf-8") as f:
         f.write(render_html(data, FLOWS_TEMPLATE_FILE))
+
+    with open(OUT_CHIPPOWER_HTML, "w", encoding="utf-8") as f:
+        f.write(render_html(data, CHIPPOWER_TEMPLATE_FILE))
+
+    with open(OUT_DELAYED_HTML, "w", encoding="utf-8") as f:
+        f.write(render_html(data, DELAYED_TEMPLATE_FILE))
 
     print("\n=== Reconciliation summary (GW) ===")
     print(f"  Needed (Power Shortfall before solutions): {rec['needed_shortfall']}")
@@ -1316,7 +1750,23 @@ def main():
     print(f"  Capacity-by-deploy year-end 2028 (GW):     {_cap28}")
     print(f"  Chips-by-deploy 2028 (GW):                 self "
           f"{chips_by_deploy['selfbuilt'][-1]}, lease {chips_by_deploy['leasing'][-1]}, neo {chips_by_deploy['neocloud'][-1]}")
-    print(f"\nWrote:\n  {OUT_JSON}\n  {OUT_HTML}\n  {OUT_CHIPS_HTML}\n  {OUT_COMPUTE_HTML}\n  {OUT_SYNTHESIS_HTML}\n  {OUT_GEO_HTML}\n  {OUT_FLOWS_HTML}")
+    print("\n=== Chip power & energy demand (client + MS files) ===")
+    _fam28 = {f["name"]: f["values"][-1] for f in chip_power_global["families"]}
+    print(f"  Global chip DC power GW 2021-28:           {chip_power_global['dc_power_gw']}")
+    print(f"  Global chip server power by family 2028:   {_fam28}")
+    print(f"  Global chip TWh actual 2021-28:            {chip_power_global['twh_actual']}")
+    print(f"  US chip DC power GW 2023-28:               {ai_power_us['dc_power_gw']}")
+    print("\n=== Cancelled & delayed (US, original online 2026-2028) ===")
+    dc = delayed_cancelled
+    print(f"  Mapped facilities:                         {dc['n_facilities']} "
+          f"(delayed {dc['n_sites']['delayed']}, cancelled {dc['n_sites']['cancelled']})")
+    print(f"  Delayed / cancelled GW:                    {dc['totals_gw']['delayed']} / {dc['totals_gw']['cancelled']}")
+    print(f"  Median delay:                              {dc['delay_stats']['median_mo']} mo "
+          f"(max {dc['delay_stats']['max_mo']} mo)")
+    print(f"  TWh/yr deferred (delayed) / lost (cancelled) @ {dc['intensity_twh_per_gw']} TWh/GW: "
+          f"{dc['twh']['delayed_deferred']} / {dc['twh']['cancelled_lost']}")
+    print(f"  Externally-cited events / macro reports:   {len(dc['cited_events'])} / {len(dc['cited_macro'])}")
+    print(f"\nWrote:\n  {OUT_JSON}\n  {OUT_HTML}\n  {OUT_CHIPS_HTML}\n  {OUT_COMPUTE_HTML}\n  {OUT_SYNTHESIS_HTML}\n  {OUT_GEO_HTML}\n  {OUT_FLOWS_HTML}\n  {OUT_CHIPPOWER_HTML}\n  {OUT_DELAYED_HTML}")
 
 
 if __name__ == "__main__":
