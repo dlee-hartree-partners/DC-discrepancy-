@@ -35,6 +35,8 @@ GEO_TEMPLATE_FILE = os.path.join(HERE, "geo_template.html")
 FLOWS_TEMPLATE_FILE = os.path.join(HERE, "flows_template.html")
 CHIPPOWER_TEMPLATE_FILE = os.path.join(HERE, "chippower_template.html")
 DELAYED_TEMPLATE_FILE = os.path.join(HERE, "delayed_template.html")
+CANCELLEDPROFILE_TEMPLATE_FILE = os.path.join(HERE, "cancelledprofile_template.html")
+SHORTFALLMATH_TEMPLATE_FILE = os.path.join(HERE, "shortfallmath_template.html")
 
 # Offline D3 / map assets (vendored, inlined into the geo + flows pages like Chart.js).
 VENDOR_D3 = os.path.join(HERE, "vendor", "d3.min.js")            # full D3 v7 (geo, zoom, force, ...)
@@ -52,6 +54,8 @@ OUT_GEO_HTML = os.path.join(HERE, "geo_dashboard.html")
 OUT_FLOWS_HTML = os.path.join(HERE, "flows_dashboard.html")
 OUT_CHIPPOWER_HTML = os.path.join(HERE, "chippower_dashboard.html")
 OUT_DELAYED_HTML = os.path.join(HERE, "delayed_dashboard.html")
+OUT_CANCELLEDPROFILE_HTML = os.path.join(HERE, "cancelledprofile_dashboard.html")
+OUT_SHORTFALLMATH_HTML = os.path.join(HERE, "shortfallmath_dashboard.html")
 
 
 def col(letter):
@@ -282,6 +286,96 @@ def extract_supply(wb):
         "top_companies": top(by_company),
     }
     return data
+
+
+def extract_schedule_bridge(wb):
+    """Reconcile the US 2025-28 annual-column increase to revised-date capacity.
+
+    The 94.1 GW annual schedule and 47.4 GW revised-date cohort use different
+    fields.  This bridge classifies the annual-column increase by revised live
+    date (CC), then aligns it to the original 2026-28 cohort (BY) and the phase
+    capacity basis (BV + CD) used by the shortfall reconciliation.
+    """
+    import datetime
+
+    ws = wb["NA Data Center Supply"]
+    cA, cCountry = col("A"), col("CT")
+    cOrig, cRevised = col("BY"), col("CC")
+    cUC, cPlanned = col("BV"), col("CD")
+    cCompany, cState = col("CV"), col("CP")
+    c25, c28 = YEAR_COLS[2025], YEAR_COLS[2028]
+    maxcol = max(cA, cCountry, cOrig, cRevised, cUC, cPlanned,
+                 cCompany, cState, c25, c28)
+
+    annual = {"lands_by_2028": 0.0, "slips_past_2028": 0.0,
+              "cancelled": 0.0, "no_revised_date": 0.0}
+    counts = {k: 0 for k in annual}
+    original_lands_annual = 0.0
+    original_lands_phase = 0.0
+    at_risk_company, at_risk_state = {}, {}
+
+    def yof(v):
+        return v.year if isinstance(v, datetime.datetime) else None
+
+    def revised_bucket(ccyr, planned_mw):
+        if (ccyr is not None and ccyr >= 2034) or (ccyr is None and planned_mw > 0):
+            return "cancelled"
+        if ccyr is None:
+            return "no_revised_date"
+        return "lands_by_2028" if ccyr <= 2028 else "slips_past_2028"
+
+    for row in ws.iter_rows(min_row=6, values_only=True):
+        if len(row) <= maxcol:
+            continue
+        a, country = row[cA], row[cCountry]
+        if not (isinstance(a, str) and len(a) >= 8 and "-" in a):
+            continue
+        if not (isinstance(country, str) and country.strip().upper() in ("USA", "US", "UNITED STATES")):
+            continue
+
+        delta = num(row[c28]) - num(row[c25])
+        origyr, ccyr = yof(row[cOrig]), yof(row[cRevised])
+        planned_mw = num(row[cPlanned])
+        bucket = revised_bucket(ccyr, planned_mw)
+
+        if delta > 0:
+            annual[bucket] += delta
+            counts[bucket] += 1
+            if bucket in ("slips_past_2028", "cancelled"):
+                co = row[cCompany].strip() if isinstance(row[cCompany], str) else "Unknown"
+                st = row[cState].strip() if isinstance(row[cState], str) else "Unknown"
+                at_risk_company[co] = at_risk_company.get(co, 0.0) + delta
+                at_risk_state[st] = at_risk_state.get(st, 0.0) + delta
+
+        if origyr in (2026, 2027, 2028) and bucket == "lands_by_2028":
+            original_lands_annual += max(0.0, delta)
+            original_lands_phase += num(row[cUC]) + planned_mw
+
+    annual_total = sum(annual.values())
+    outside_original_cohort = annual["lands_by_2028"] - original_lands_annual
+    basis_adjustment = original_lands_phase - original_lands_annual
+    at_risk = annual["slips_past_2028"] + annual["cancelled"]
+
+    def gw(v):
+        return round(v / 1000.0, 3)
+
+    def top(d, n=8):
+        return [{"name": k, "gw": gw(v)} for k, v in sorted(d.items(), key=lambda kv: -kv[1])[:n]]
+
+    return {
+        "annual_total_gw": gw(annual_total),
+        "annual_by_revised_gw": {k: gw(v) for k, v in annual.items()},
+        "annual_by_revised_count": counts,
+        "annual_lands_by2028_gw": gw(annual["lands_by_2028"]),
+        "outside_original_cohort_gw": gw(outside_original_cohort),
+        "original_cohort_annual_lands_gw": gw(original_lands_annual),
+        "phase_capacity_adjustment_gw": gw(basis_adjustment),
+        "revised_cohort_lands_gw": gw(original_lands_phase),
+        "at_risk_gw": gw(at_risk),
+        "at_risk_pct": round(at_risk / annual_total, 3) if annual_total else None,
+        "top_at_risk_companies": top(at_risk_company),
+        "top_at_risk_states": top(at_risk_state),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -1201,7 +1295,9 @@ def extract_delayed_cancelled(wb, utilization, pue_2028):
     cCE, cCD, cBV, cBY, cCC = col("CE"), col("CD"), col("BV"), col("BY"), col("CC")
     cLat, cLng = col("CN"), col("CO")
     cCompany, cState, cCity, cType = col("CV"), col("CP"), col("CQ"), col("CX")
-    maxcol = max(cA, cCountry, cCE, cCD, cBV, cBY, cCC, cLat, cLng, cCompany, cState, cCity, cType)
+    cGpu, cTenant = col("DA"), col("DB")               # for the deployment-class heuristic
+    maxcol = max(cA, cCountry, cCE, cCD, cBV, cBY, cCC, cLat, cLng,
+                 cCompany, cState, cCity, cType, cGpu, cTenant)
 
     intensity = round(HOURS_PER_YEAR * utilization * pue_2028 / 1000.0, 3)  # TWh per GW-yr
 
@@ -1215,8 +1311,9 @@ def extract_delayed_cancelled(wb, utilization, pue_2028):
     # For the shortfall test: does the slip actually remove capacity the client's
     # waterfall counts on? Split UC vs Planned by whether the REVISED live date
     # still lands in-window (<=2028), slips past 2028, or is cancelled.
-    sf = {"uc": {"by2028": 0.0, "past2028": 0.0, "cancelled": 0.0},
-          "planned": {"by2028": 0.0, "past2028": 0.0, "cancelled": 0.0}}
+    sf_buckets = ("by2028", "past2028", "cancelled", "unknown")
+    sf = {"uc": {k: 0.0 for k in sf_buckets},
+          "planned": {k: 0.0 for k in sf_buckets}}
     by_company = {}
     buckets = {"3-6 mo": 0, "6-12 mo": 0, "1-2 yr": 0, "2-4 yr": 0, ">4 yr / cancelled": 0}
     delays = []
@@ -1243,8 +1340,20 @@ def extract_delayed_cancelled(wb, utilization, pue_2028):
         cc = row[cCC]
         ccyr = yof(cc)
 
-        # classify
-        if (ccyr is not None and ccyr >= 2034) or (ccyr is None and num(row[cCD]) > 0):
+        # Reconcile the complete original-2026-28 cohort before the map-specific
+        # delay and coordinate filters below.  This makes shortfall_split a true
+        # time-aligned capacity bridge rather than a subset of delayed sites.
+        if (ccyr is not None and ccyr >= 2034) or (ccyr is None and planned_gw > 0):
+            sf_bucket = "cancelled"
+        elif ccyr is not None:
+            sf_bucket = "past2028" if ccyr >= 2029 else "by2028"
+        else:
+            sf_bucket = "unknown"
+        sf["uc"][sf_bucket] += uc_gw
+        sf["planned"][sf_bucket] += planned_gw
+
+        # classify the affected facilities used by the delayed/cancelled pages
+        if sf_bucket == "cancelled":
             status, delay_mo = "cancelled", None
         elif isinstance(cc, datetime.datetime) and isinstance(by, datetime.datetime):
             dm = (cc - by).days / 30.44
@@ -1268,12 +1377,6 @@ def extract_delayed_cancelled(wb, utilization, pue_2028):
         n[status] += 1
         by_phase[status]["uc"] += uc_gw
         by_phase[status]["planned"] += planned_gw
-        if status == "cancelled":
-            bucket = "cancelled"
-        else:
-            bucket = "past2028" if (ccyr and ccyr >= 2029) else "by2028"
-        sf["uc"][bucket] += uc_gw
-        sf["planned"][bucket] += planned_gw
         by_company[co] = by_company.get(co, 0.0) + gw
         if status == "cancelled":
             buckets[">4 yr / cancelled"] += 1
@@ -1295,6 +1398,7 @@ def extract_delayed_cancelled(wb, utilization, pue_2028):
             "gw": round(gw, 4), "orig": yof(by), "rev": ccyr,
             "delay_mo": delay_mo, "status": status,
             "uc": uc_gw > 0,                                # committed (Under Construction) vs Planned
+            "cls": _deploy_class(row[cCompany], row[cTenant], row[cGpu], row[cType]),
         })
 
     def r3(v):
@@ -1502,14 +1606,14 @@ def derive_bridge(nv, client_chips, supply):
 # --------------------------------------------------------------------------- #
 # Reconciliation
 # --------------------------------------------------------------------------- #
-def reconcile(shortfall, supply):
+def reconcile(shortfall, supply, delayed_cancelled=None, balance=None):
     needed = shortfall["shortfall_before_solutions"]
     us_uc = supply["totals_gw"]["uc"]
     us_pluc = supply["totals_gw"]["pluc"]
     us_planned = supply["totals_gw"]["planned"]
     us_add_26_28 = supply["totals_gw"]["delta_25_28"]
 
-    return {
+    out = {
         "needed_shortfall": needed,                       # 37.71
         "client_uc": abs(shortfall["less_under_construction"]),   # 14.85
         "model_us_uc": us_uc,                             # ~26.28
@@ -1518,10 +1622,48 @@ def reconcile(shortfall, supply):
         "model_us_planned": us_planned,                   # ~202
         "model_us_pluc": us_pluc,                         # ~228
         "residual_pluc_vs_needed": round(us_pluc - needed, 2),
+        # Descriptive pipeline multiple only.  This is intentionally not called
+        # coverage because Planned+UC is an all-year stock while needed is a
+        # 2026-28 residual after UC and grid access have already been credited.
+        "pipeline_to_shortfall_multiple": round(us_pluc / needed, 2) if needed else None,
         "coverage_ratio_pluc": round(us_pluc / needed, 2) if needed else None,
         "coverage_ratio_additions": round(us_add_26_28 / shortfall["demand_2026_28"], 2)
         if shortfall["demand_2026_28"] else None,
     }
+
+    if delayed_cancelled is not None:
+        sf = delayed_cancelled["shortfall_split"]
+        uc_by2028 = sf["uc"]["by2028"]
+        planned_by2028 = sf["planned"]["by2028"]
+        by2028_total = uc_by2028 + planned_by2028
+        incremental = max(0.0, uc_by2028 - out["client_uc"]) + planned_by2028
+        residual = max(0.0, needed - incremental)
+        slips = sf["uc"]["past2028"] + sf["planned"]["past2028"]
+        cancelled = sf["uc"]["cancelled"] + sf["planned"]["cancelled"]
+        out.update({
+            "model_us_by2028_uc_gw": round(uc_by2028, 3),
+            "model_us_by2028_planned_gw": round(planned_by2028, 3),
+            "model_us_by2028_total_gw": round(by2028_total, 3),
+            "model_us_incremental_vs_client_gw": round(incremental, 3),
+            "time_aligned_residual_gw": round(residual, 3),
+            "time_aligned_coverage_ratio": round(incremental / needed, 2) if needed else None,
+            "model_us_slips_past_2028_gw": round(slips, 3),
+            "model_us_cancelled_gw": round(cancelled, 3),
+        })
+
+    if balance is not None and 2028 in balance["years"]:
+        i28 = balance["years"].index(2028)
+        demand_2028 = balance["total_demand_mw"][i28] / 1000.0
+        capacity_2028 = balance["total_capacity_mw"][i28] / 1000.0
+        out.update({
+            "model_na_annual_balance_2028_gw": round(balance["surplus_deficit_mw"][i28] / 1000.0, 3),
+            "model_na_cum_balance_2028_gw": round(balance["cum_surplus_deficit_mw"][i28] / 1000.0, 3),
+            "model_na_demand_2028_gw": round(demand_2028, 3),
+            "model_na_capacity_2028_gw": round(capacity_2028, 3),
+            "model_na_demand_minus_capacity_2028_gw": round(demand_2028 - capacity_2028, 3),
+        })
+
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -1597,7 +1739,7 @@ def main():
     for p in (CLIENT_FILE, MODEL_FILE, NV_FILE, VENDOR_CHARTJS, TEMPLATE_FILE,
               CHIPS_TEMPLATE_FILE, COMPUTE_TEMPLATE_FILE, SYNTHESIS_TEMPLATE_FILE,
               GEO_TEMPLATE_FILE, FLOWS_TEMPLATE_FILE, CHIPPOWER_TEMPLATE_FILE,
-              DELAYED_TEMPLATE_FILE,
+              DELAYED_TEMPLATE_FILE, CANCELLEDPROFILE_TEMPLATE_FILE, SHORTFALLMATH_TEMPLATE_FILE,
               VENDOR_D3, VENDOR_SANKEY, VENDOR_TOPOJSON, VENDOR_US_TOPO, VENDOR_PIPELINES):
         if not os.path.exists(p):
             raise SystemExit(f"Missing required file: {p}")
@@ -1613,12 +1755,14 @@ def main():
     print("Extracting model file (supply + buildout + chip watts) ...")
     model_wb = openpyxl.load_workbook(MODEL_FILE, read_only=True, data_only=True)
     supply = extract_supply(model_wb)
+    schedule_bridge = extract_schedule_bridge(model_wb)
     buildout = extract_buildout(model_wb)
     model_watts = extract_chip_watts(model_wb)
     geo = extract_geo(model_wb)
     cap_by_deploy = extract_capacity_by_deploy(model_wb)
     print("Computing natural-gas pipeline proximity ...")
-    annotate_pipe_proximity(geo, load_pipelines())
+    pipes = load_pipelines()
+    annotate_pipe_proximity(geo, pipes)
     print("Extracting model file (demand, balance, revisions, slippage, additions) ...")
     customer = extract_customer_demand(model_wb)
     unconstrained = extract_unconstrained(model_wb)
@@ -1628,6 +1772,8 @@ def main():
     dash_adds = extract_dashboard_adds(model_wb)
     delayed_cancelled = extract_delayed_cancelled(
         model_wb, client_chips["utilization"], client_chips["pue"][-1])
+    # pipeline proximity for the cancelled/delayed facilities (same network as geo page)
+    annotate_pipe_proximity({"facilities": delayed_cancelled["facilities"]}, pipes)
     model_wb.close()
 
     print("Extracting NV server model (chips, racks, customers) ...")
@@ -1637,6 +1783,7 @@ def main():
         ("constrained AI power 2028 = 110410 MW", customer["ai_power_mw"][customer["years"].index(2028)], 110409.6, 5),
         ("unconstrained AI power 2028 = 126407 MW", unconstrained["ai_power_mw"][unconstrained["years"].index(2028)], 126406.8, 5),
         ("NA balance surplus 2028 = +7711 MW", balance["surplus_deficit_mw"][balance["years"].index(2028)], 7711.0, 5),
+        ("NA cumulative balance 2028 = -689 MW", balance["cum_surplus_deficit_mw"][balance["years"].index(2028)], -689.0, 5),
         ("NA total demand 2028 = 89913 MW", balance["total_demand_mw"][balance["years"].index(2028)], 89912.8, 5),
         ("GenAI TWh 2028 = 801.64", client_chips["twh_genai_global"][-1], 801.64, 0.5),
         ("US GenAI TWh 2028 = 455.07", client_chips["twh_genai_us"][-1], 455.07, 0.5),
@@ -1658,10 +1805,30 @@ def main():
         ("cancelled (orig 2026-28) GW ~= 27.2", delayed_cancelled["totals_gw"]["cancelled"], 27.2, 3.0),
         ("mapped facilities (orig 2026-28) ~= 855",
          delayed_cancelled["n_facilities"], 855, 15),
+        ("cancelled + delayed-past-2028 GW ~= 119.8",
+         delayed_cancelled["totals_gw"]["cancelled"]
+         + delayed_cancelled["shortfall_split"]["uc"]["past2028"]
+         + delayed_cancelled["shortfall_split"]["planned"]["past2028"], 119.8, 3.0),
+        ("original-2026-28 cohort landing by 2028 ~= 47.4 GW",
+         delayed_cancelled["shortfall_split"]["uc"]["by2028"]
+         + delayed_cancelled["shortfall_split"]["planned"]["by2028"], 47.4, 1.0),
+        ("annual-schedule bridge starts at 94.1 GW",
+         schedule_bridge["annual_total_gw"], 94.113, 0.01),
+        ("annual-schedule bridge lands at 47.4 GW",
+         schedule_bridge["revised_cohort_lands_gw"], 47.387, 0.01),
+        ("annual-schedule bridge arithmetic reconciles",
+         schedule_bridge["annual_total_gw"]
+         - schedule_bridge["annual_by_revised_gw"]["slips_past_2028"]
+         - schedule_bridge["annual_by_revised_gw"]["cancelled"]
+         - schedule_bridge["annual_by_revised_gw"]["no_revised_date"]
+         - schedule_bridge["outside_original_cohort_gw"]
+         + schedule_bridge["phase_capacity_adjustment_gw"],
+         schedule_bridge["revised_cohort_lands_gw"], 0.01),
     ]
     self_check(shortfall, supply, nv, buildout, client_chips, extra)
 
-    rec = reconcile(shortfall, supply)
+    rec = reconcile(shortfall, supply, delayed_cancelled, balance)
+    rec["schedule_bridge"] = schedule_bridge
     bridge = derive_bridge(nv, client_chips, supply)
     energy_split = derive_energy_split(client_chips)
     compute_split = derive_compute_split(client_chips)
@@ -1680,6 +1847,8 @@ def main():
             "chippower": {"global": chip_power_global, "us": ai_power_us},
             "delayed_cancelled": delayed_cancelled,
             "meta": {
+                "client_source": "Morgan Stanley",
+                "model_source": "SemiAnalysis",
                 "client_file": os.path.basename(CLIENT_FILE),
                 "model_file": os.path.basename(MODEL_FILE),
                 "nv_file": os.path.basename(NV_FILE),
@@ -1714,6 +1883,12 @@ def main():
     with open(OUT_DELAYED_HTML, "w", encoding="utf-8") as f:
         f.write(render_html(data, DELAYED_TEMPLATE_FILE))
 
+    with open(OUT_CANCELLEDPROFILE_HTML, "w", encoding="utf-8") as f:
+        f.write(render_html(data, CANCELLEDPROFILE_TEMPLATE_FILE))
+
+    with open(OUT_SHORTFALLMATH_HTML, "w", encoding="utf-8") as f:
+        f.write(render_html(data, SHORTFALLMATH_TEMPLATE_FILE))
+
     print("\n=== Reconciliation summary (GW) ===")
     print(f"  Needed (Power Shortfall before solutions): {rec['needed_shortfall']}")
     print(f"  Client Under-Construction assumption:      {rec['client_uc']}")
@@ -1722,8 +1897,12 @@ def main():
     print(f"  Model US capacity added 2026-28:           {rec['model_us_additions_26_28']}")
     print(f"  Model US Planned:                          {rec['model_us_planned']}")
     print(f"  Model US Planned + UC:                     {rec['model_us_pluc']}")
-    print(f"  Planned+UC vs needed (residual):           {rec['residual_pluc_vs_needed']}  "
-          f"(coverage x{rec['coverage_ratio_pluc']})")
+    print(f"  Planned+UC vs needed (all-year exposure):  {rec['residual_pluc_vs_needed']}  "
+          f"(pipeline multiple x{rec['pipeline_to_shortfall_multiple']})")
+    print(f"  Status-adjusted cohort landing by 2028:    {rec['model_us_by2028_total_gw']}")
+    print(f"  Incremental vs client-credited UC:         {rec['model_us_incremental_vs_client_gw']}  "
+          f"(x{rec['time_aligned_coverage_ratio']}, residual {rec['time_aligned_residual_gw']})")
+    print(f"  Model own NA cumulative balance, 2028:     {rec['model_na_cum_balance_2028_gw']}")
     print("\n=== Chips & buildout summary ===")
     print(f"  NVL72 racks 2025/26/27:                    {nv['rack_totals']}")
     print(f"  Chip-implied power GW (PUE {bridge['pue']}):           {bridge['implied_gw']}")
@@ -1766,7 +1945,7 @@ def main():
     print(f"  TWh/yr deferred (delayed) / lost (cancelled) @ {dc['intensity_twh_per_gw']} TWh/GW: "
           f"{dc['twh']['delayed_deferred']} / {dc['twh']['cancelled_lost']}")
     print(f"  Externally-cited events / macro reports:   {len(dc['cited_events'])} / {len(dc['cited_macro'])}")
-    print(f"\nWrote:\n  {OUT_JSON}\n  {OUT_HTML}\n  {OUT_CHIPS_HTML}\n  {OUT_COMPUTE_HTML}\n  {OUT_SYNTHESIS_HTML}\n  {OUT_GEO_HTML}\n  {OUT_FLOWS_HTML}\n  {OUT_CHIPPOWER_HTML}\n  {OUT_DELAYED_HTML}")
+    print(f"\nWrote:\n  {OUT_JSON}\n  {OUT_HTML}\n  {OUT_CHIPS_HTML}\n  {OUT_COMPUTE_HTML}\n  {OUT_SYNTHESIS_HTML}\n  {OUT_GEO_HTML}\n  {OUT_FLOWS_HTML}\n  {OUT_CHIPPOWER_HTML}\n  {OUT_DELAYED_HTML}\n  {OUT_CANCELLEDPROFILE_HTML}\n  {OUT_SHORTFALLMATH_HTML}")
 
 
 if __name__ == "__main__":

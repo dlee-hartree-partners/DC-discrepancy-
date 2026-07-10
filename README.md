@@ -1,15 +1,15 @@
 # DC Discrepancy Dashboards
 
-Eight cross-linked dashboard pages built from three data-center workbooks:
+Ten cross-linked dashboard pages built from three data-center workbooks:
 
 | Source | File | Key tabs |
 |--------|------|----------|
-| Client / demand | `Client_Intelligence Factory Anaysis_June11_2026 (1) - v2.xlsx` | `US Shortfall Analysis`, `Power Summary`, `Compute Demand`, `AI Power_US`, `AI Power_Global` |
-| Supply model | `AI-Data-Center-Model-CLIENT-April-7-noSKU.xlsx` | `NA Data Center Supply`, `Hyperscalers & Neoclouds`, `Power Requirements per Chip`, `AI CPU Demand calculations` |
+| Morgan Stanley / demand | `Client_Intelligence Factory Anaysis_June11_2026 (1) - v2.xlsx` | `US Shortfall Analysis`, `Power Summary`, `Compute Demand`, `AI Power_US`, `AI Power_Global` |
+| SemiAnalysis / capacity | `AI-Data-Center-Model-CLIENT-April-7-noSKU.xlsx` | `NA Data Center Supply`, `Hyperscalers & Neoclouds`, `Power Requirements per Chip`, `AI CPU Demand calculations` |
 | MS Nvidia server model | `Request_NV AI Server Model_052126 2.xlsx` | `ODM share analysis`, `GB200-300 Tracker`, `GPU Roadmap`, `Nvidia Rack Layout` |
 
-**Page 1 (`dashboard.html`):** does the facility-level supply model's US *Planned + UC* capacity match
-the client's *Power Shortfall Before New "Time to Power" Solutions* (**37.71 GW**)?
+**Page 1 (`dashboard.html`):** compares Morgan Stanley's estimated U.S. data-center power-capacity need with
+SemiAnalysis capacity scheduled to arrive by 2028, while avoiding double-counting capacity Morgan Stanley already credits.
 
 **Page 2 (`chips_dashboard.html`):** chip demand (which SKUs, how many), power per chip, the derived
 chip→data-center power bridge, and what kind of capacity it lands in (self-build vs leased vs neocloud).
@@ -72,11 +72,31 @@ CD). A **shortfall-effect** card asks whether any of this contests the client wa
 2026–28, **19.0 GW still lands by 2028** and only **0.66 GW slips past** it (none cancelled), and the model shows
 **26.3 GW** of US UC total, *more* than the 14.9 GW credited. The slip is almost entirely in **Planned (paper)
 capacity** — **92.0 GW pushed past 2028 + 27.2 GW cancelled** — which the waterfall never counted, so the 37.7 GW
-shortfall stands; what erodes is the supply model's apparent *surplus* over it (page 1's ~6× "coverage" from a
-228 GW planned pipeline). Also a delay-length histogram, a **cited table** with source
+shortfall stands; the 228 GW all-year pipeline is therefore presented as **exposure, not coverage**. Also a delay-length histogram, a **cited table** with source
 links, and macro pullbacks (Baird's ~25 US cancellations in 2025 — Indiana ~8 / ~5 GW; Microsoft ~200 MW leases /
 TD Cowen; AWS / Wells Fargo; Data Center Watch's $130B/75+ blocked in Q1 2026), with a SemiAnalysis caveat on the
-disputed "half of 2026 is cancelled" claim.
+disputed "half of 2026 is cancelled" claim. Page 8 also carries a **size-distribution histogram** contrasting the
+slipping Under-Construction sites (238, mostly <0.1 GW) with the Planned pipeline (613 sites skewed to 0.5–2+ GW
+campuses) — the paper capacity is where the size, and the risk, sits.
+
+**Page 9 (`cancelledprofile_dashboard.html`):** *what kind of sites got cancelled?* — a **histograms-only** profile of
+the capacity that leaves the 2026–28 window (**cancelled + delayed-past-2028**, ~120 GW) by **deployment type**
+(neocloud / leasing / self-built — the geo page's labeled heuristic), **site size (GW)**, and **proximity to the EIA
+gas-pipeline network**. Charts: GW by deployment type (stacked cancelled vs delayed-out, count/GW toggle); size
+distribution stacked by type; GW by pipeline-distance band; and a deployment-type × proximity cross-tab. Key reads:
+the lost capacity is dominated by large self-built/leasing speculative campuses (1 GW+ sites are the bulk), and most
+of it sits within 5 mi of a gas pipeline — so gas access was not the binding constraint. Model-derived (needs deploy
+class + coordinates); the externally-cited cancellations stay on page 8.
+
+**Page 10 (`shortfallmath_dashboard.html`):** the **"show the math" reconciliation ledger** — Morgan Stanley's estimated
+need vs SemiAnalysis capacity, line by line with a **Source** tag on every row (charts + tables). **(A)** the
+Morgan Stanley waterfall (demand 67.6 − UC 14.9 − grid 15.0 = **37.7 GW** still needed, then probability-weighted
+time-to-power solutions → remaining, low/mid/high toggle); **(B)** the SemiAnalysis supply book (US UC 26.3 / Planned
+202.2 / Planned+UC 228.4 / 2026–28 additions 94.1) and its **own** NA supply-demand balance, which runs a
+**0.7 GW capacity gap** in 2028 (89.9 GW data-center demand vs 89.2 GW installed capacity; this is not a chip shortage); **(C)** the time-aligned head-to-head — capacity landing by 2028, less
+the UC already credited by Morgan Stanley, provides only about **0.86×** the remaining need; **(D)** the reality check — **119.8 GW**
+of the originally-2026–28 capacity leaves the window (27.2 cancelled + 92.6 delayed to 2029+), ~3.2× the shortfall,
+which is why the raw pipeline-size multiple reconciles with a near-balance. Pure presentation over `dashboard_data.json`.
 
 ## Run
 
@@ -95,6 +115,8 @@ This reads the three workbooks and writes:
 - **`flows_dashboard.html`** — four D3 views: Sankey, circle-pack, streamgraph, beeswarm (page 6).
 - **`chippower_dashboard.html`** — GW & TWh needed by the chips, global & US, from the client + MS files (page 7).
 - **`delayed_dashboard.html`** — map of cancelled / delayed sites (original online 2026–28) and their GW / TWh impact, with cited sources (page 8).
+- **`cancelledprofile_dashboard.html`** — histogram profile of cancelled + delayed-out capacity by deployment type, size, and pipeline proximity (page 9).
+- **`shortfallmath_dashboard.html`** — reconciliation ledger (tables + charts): expected shortfall vs the model's numbers, with per-line sourcing (page 10).
 - **`dashboard_data.json`** — all extracted + reconciled figures.
 
 All pages are self-contained and work offline (Chart.js inlined; pages 5–6 also inline the full
@@ -105,10 +127,11 @@ from the expected values.
 ## What page 1 shows
 
 1. **Shortfall waterfall** — demand → less under-construction → less grid access → shortfall → "Time to Power" solutions → net (Low/Midpoint/High toggle).
-2. **Coverage** — model US Under-Construction and Planned+UC vs the 37.71 GW "needed" line.
-3. **YoY capacity** — US installed capacity 2017–2032, hyperscaler vs colocation, 2026–28 band.
-4. **Assumption gaps** — model vs client on under-construction and 2026–28 additions.
-5. **Pipeline concentration** — top US states and companies by Planned+UC.
+2. **94-to-47 drill-down** — the SemiAnalysis annual schedule split into capacity landing by 2028, revised to 2029+, cancelled/indefinite, scope differences, and basis adjustment.
+3. **Time-aligned bridge** — the original 2026–28 cohort by revised live date, less UC already credited by Morgan Stanley, vs the 37.71 GW remaining need.
+4. **YoY schedule path** — US annual capacity columns for 2017–2032, shown separately from revised-live-date delivery.
+5. **Source-view differences** — SemiAnalysis vs Morgan Stanley on UC landing by 2028 and gross demand.
+6. **Pipeline concentration** — top US states and companies by all-year Planned+UC exposure.
 
 ## What page 2 shows
 
@@ -123,10 +146,12 @@ from the expected values.
 
 ## Key findings (as built)
 
-- Client assumes **14.85 GW** under construction; the model shows **26.3 GW** (~77% higher).
-- Client US demand 2026–28 = **67.6 GW**; the model adds **94.1 GW** of US capacity over the same window.
-- The **37.71 GW** shortfall is dwarfed by the model's US planned pipeline (**~202 GW**, ~6× coverage) —
-  the real question is how much of that "planned" capacity actually gets built and powered.
+- Morgan Stanley assumes **14.85 GW** under construction; the SemiAnalysis revised-live-date cohort has about **19.1 GW** of UC landing by 2028.
+- SemiAnalysis annual columns imply **94.1 GW** of US additions, but only about **47.4 GW** from the original 2026–28 cohort lands by 2028 after revised dates.
+- Of the 94.1 GW annual schedule, **38.1 GW** is tied to sites revised to 2029+ and **5.1 GW** to cancelled/indefinite projects — **43.2 GW / 45.9%** at risk before scope and basis adjustments.
+- After removing UC already credited by Morgan Stanley, the illustrative incremental bridge is about **32.5 GW** against Morgan Stanley's **37.71 GW** remaining need, leaving about **5.2 GW** before any grid-access overlap.
+- Separately, SemiAnalysis projects **89.9 GW** of North American data-center demand versus **89.2 GW** of installed capacity in 2028: a **0.7 GW data-center capacity gap, not a chip-production gap**.
+- The **~228 GW** Planned+UC figure is an all-year pipeline exposure, not a shortfall-coverage measure.
 - A year of NVL72 racks alone implies **5 / 15 / 29 GW** of facility power (2025/26/27, PUE 1.3) —
   by 2027 rivaling the client's *entire* US additions (22.5 GW).
 - Frontier labs' identified data centers total **~43 GW by 2028** (OpenAI 14.7, GDM 9.8, Anthropic 8.9) —
@@ -154,9 +179,11 @@ from the expected values.
 | `flows_template.html` | Page 6 template (Sankey, circle-pack, streamgraph, beeswarm) |
 | `chippower_template.html` | Page 7 template (chip GW/TWh demand: global & US, per-chip driver) |
 | `delayed_template.html` | Page 8 template (cancelled/delayed US map — original-2026–28 sites, GW & TWh impact, cited sources) |
+| `cancelledprofile_template.html` | Page 9 template (cancelled + delayed-out profile: deployment type, size, pipeline proximity histograms) |
+| `shortfallmath_template.html` | Page 10 template (reconciliation ledger: shortfall vs model, tables + charts, sourced) |
 | `vendor/chart.umd.js` | Vendored Chart.js v4 (inlined for offline use) |
 | `vendor/d3.min.js` | Vendored full D3 v7 (geo, zoom, force, hierarchy…; inlined into pages 5–6) |
 | `vendor/d3-sankey.min.js` | Vendored d3-sankey plugin (inlined into page 6) |
 | `vendor/topojson-client.min.js`, `vendor/us-states-10m.json` | topojson + US states TopoJSON (inlined into page 5) |
 | `vendor/us-gas-pipelines.json` | EIA natural-gas pipeline network, simplified to 2dp (inlined into page 5; also used to compute per-facility pipeline distance) |
-| `dashboard.html` / `chips_dashboard.html` / `compute_dashboard.html` / `synthesis_dashboard.html` / `geo_dashboard.html` / `flows_dashboard.html` / `chippower_dashboard.html` / `delayed_dashboard.html` / `dashboard_data.json` | Generated output |
+| `dashboard.html` / `chips_dashboard.html` / `compute_dashboard.html` / `synthesis_dashboard.html` / `geo_dashboard.html` / `flows_dashboard.html` / `chippower_dashboard.html` / `delayed_dashboard.html` / `cancelledprofile_dashboard.html` / `shortfallmath_dashboard.html` / `dashboard_data.json` | Generated output |

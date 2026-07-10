@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Got Cancelled &mdash; Profile</title>
+<style>
+  :root {
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --gridline: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --series-3: #eda100;
+    --series-6: #4a3aa7;
+    --critical: #d03b3b;
+    --warning: #e0930a;
+    /* deployment palette (matches the Geography page) */
+    --neocloud: #e0699b;
+    --leasing:  #2a78d6;
+    --selfbuilt:#9085e9;
+    /* pipeline proximity palette (matches the Geography page) */
+    --near: #1baf7a;
+    --mid: #eda100;
+    --far: #d03b3b;
+    --shadow: 0 1px 2px rgba(11,11,11,0.05), 0 1px 3px rgba(11,11,11,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0d0d0d;
+      --surface-1: #1a1a19;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --gridline: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5;
+      --series-3: #c98500;
+      --series-6: #9085e9;
+      --critical: #e66767;
+      --warning: #f0a83a;
+      --neocloud: #e87ba4;
+      --leasing:  #3987e5;
+      --selfbuilt:#9d93f0;
+      --near: #199e70;
+      --mid: #c98500;
+      --far: #e66767;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.45; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 32px 24px 80px; }
+  nav.pagenav { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  nav.pagenav a {
+    font-size: 13px; padding: 6px 14px; border-radius: 999px; text-decoration: none;
+    border: 1px solid var(--border); color: var(--text-secondary); background: var(--surface-1);
+  }
+  nav.pagenav a.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  header h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header .sub { color: var(--text-secondary); font-size: 15px; margin: 0 0 4px; }
+  header .src { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+  .banner {
+    margin: 22px 0 26px; padding: 14px 16px; border-radius: 10px;
+    background: color-mix(in srgb, var(--warning) 12%, var(--surface-1));
+    border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);
+  }
+  .banner b { color: var(--text-primary); }
+  .section-label {
+    font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
+    margin: 30px 0 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ""; flex: 1; height: 1px; background: var(--gridline); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 6px 0 8px; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .kpi .label { font-size: 11.5px; color: var(--text-secondary); }
+  .kpi .val { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; margin-top: 3px; }
+  .kpi .val .unit { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .kpi .note { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 20px; box-shadow: var(--shadow); margin-bottom: 22px;
+  }
+  .card h2 { font-size: 16.5px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  .card .cap { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 14px; }
+  .card .cap .cell { color: var(--muted); }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; font-size: 12.5px; }
+  .controls .lbl { color: var(--muted); margin-right: 2px; }
+  .controls button {
+    font-size: 12px; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-secondary); cursor: pointer;
+  }
+  .controls button.active { background: var(--series-1); color: #fff; border-color: transparent; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .chart-box { position: relative; height: 320px; }
+  .subhead { text-align: center; font-size: 12.5px; color: var(--muted); margin: 0 0 6px; }
+  .takeaway { font-size: 13px; color: var(--text-secondary); margin-top: 12px; padding-left: 12px;
+    border-left: 3px solid var(--series-6); }
+  .takeaway b { color: var(--text-primary); }
+  footer { margin-top: 34px; color: var(--muted); font-size: 12px; text-align: center; }
+  @media (max-width: 820px) { .kpis { grid-template-columns: repeat(2,1fr); } .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
+<div class="wrap">
+  <nav class="pagenav">
+    <a href="dashboard.html">Morgan Stanley vs SemiAnalysis</a>
+    <a href="chips_dashboard.html">Chips &amp; Buildout</a>
+    <a href="compute_dashboard.html">Compute &amp; Energy</a>
+    <a href="synthesis_dashboard.html">Synthesis</a>
+    <a href="geo_dashboard.html">Geography &amp; Deployment</a>
+    <a href="flows_dashboard.html">Flows &amp; Patterns</a>
+    <a href="chippower_dashboard.html">Chip Power &amp; Energy</a>
+    <a href="delayed_dashboard.html">Cancelled &amp; Delayed</a>
+    <a href="cancelledprofile_dashboard.html" class="active">Cancelled Profile</a>
+    <a href="shortfallmath_dashboard.html">Shortfall Math</a>
+  </nav>
+  <header>
+    <h1>What Got Cancelled &mdash; Profile</h1>
+    <p class="sub">The capacity that <b>leaves the 2026&ndash;2028 window</b> &mdash; cancelled outright, or delayed to 2029+ &mdash; profiled by deployment type, size, and proximity to the natural-gas pipeline network.</p>
+    <p class="src" id="src-line"></p>
+  </header>
+
+  <div class="banner">
+    <b>Scope: sites originally due 2026&ndash;28 that no longer land in the window</b> &mdash; <span style="color:var(--critical)"><b>cancelled</b></span> (far-future / indefinite model live date) plus <b>delayed past 2028</b> (revised live date 2029+).
+    <b>Deployment type</b> (neocloud / leasing / self-built) is the same labeled heuristic used on the Geography page (neocloud operator/tenant/GPU-cloud tag &rarr; neocloud; hyperscaler-type &rarr; self-built; else leasing).
+    <b>Pipeline proximity</b> is straight-line distance to the nearest EIA gas pipeline &mdash; a proxy for how readily a site could add on-site gas generation. This is the <b>model-derived</b> set; the externally-cited cancellations (Indiana etc.) live on the <i>Cancelled &amp; Delayed</i> page.
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="section-label">By deployment type</div>
+
+  <div class="card">
+    <h2>1. Cancelled &amp; delayed-out capacity by deployment type</h2>
+    <p class="cap">GW leaving the 2026&ndash;28 window, split neocloud / leasing / self-built, stacked by cancelled vs delayed-past-2028. <span class="cell">(deployment class derived; toggle count vs GW)</span></p>
+    <div class="controls" id="type-controls">
+      <span class="lbl">Measure</span>
+      <button data-m="gw" class="active">GW</button>
+      <button data-m="count"># sites</button>
+    </div>
+    <div class="chart-box"><canvas id="byType"></canvas></div>
+    <p class="takeaway" id="type-take"></p>
+  </div>
+
+  <div class="section-label">By size</div>
+
+  <div class="card">
+    <h2>2. Size distribution, stacked by deployment type</h2>
+    <p class="cap">How the lost capacity spreads across site sizes (GW, Planned+UC per site), colored by deployment type. <span class="cell">(NA Data Center Supply: col CE per site)</span></p>
+    <div class="chart-box"><canvas id="bySize"></canvas></div>
+    <p class="takeaway" id="size-take"></p>
+  </div>
+
+  <div class="section-label">By natural-gas pipeline proximity</div>
+
+  <div class="card">
+    <h2>3. Distance to the nearest gas pipeline</h2>
+    <p class="cap">Lost capacity by distance band to the EIA gas-pipeline network (a proxy for how readily a site could self-generate), and how that distance breaks down within each deployment type. <span class="cell">(EIA Natural Gas Pipelines; straight-line distance, GW)</span></p>
+    <div class="grid2">
+      <div><p class="subhead">GW by proximity band (stacked by type)</p><div class="chart-box"><canvas id="byPipe"></canvas></div></div>
+      <div><p class="subhead">Proximity within each type (cross-tab)</p><div class="chart-box"><canvas id="typePipe"></canvas></div></div>
+    </div>
+    <p class="takeaway" id="pipe-take"></p>
+  </div>
+
+  <footer>Generated by <code>build_dashboard.py</code> &middot; self-contained &middot; charts via vendored Chart.js &middot; deployment class &amp; pipeline proximity are labeled heuristics (see the Geography page)</footer>
+</div>
+
+<script>/*__CHARTJS__*/</script>
+<script>
+const DATA = __DATA__;
+const DC = DATA.delayed_cancelled;
+// "leaves the 2026-28 window" = cancelled, or delayed with a revised live date in 2029+
+const LOST = DC.facilities.filter(f => f.status==='cancelled' || (f.status==='delayed' && f.rev!=null && f.rev>=2029));
+let charts = [];
+function cssv(name){ return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+function fmt(v,d){ return (v==null?'':Number(v).toFixed(d==null?1:d)); }
+
+const CLS = [{key:'selfbuilt',label:'Self-built',c:'--selfbuilt'},
+             {key:'leasing',  label:'Leasing',   c:'--leasing'},
+             {key:'neocloud', label:'Neocloud',  c:'--neocloud'}];
+const PIPES = [{key:'near',label:'≤5 mi',c:'--near',lo:0,hi:5},
+               {key:'mid', label:'5–25 mi',c:'--mid',lo:5,hi:25},
+               {key:'far', label:'>25 mi',c:'--far',lo:25,hi:Infinity}];
+function pipeBucket(mi){ if(mi==null||mi>25) return 'far'; if(mi<=5) return 'near'; return 'mid'; }
+function baseOpts(text,muted,grid,yTitle,stacked){
+  return { responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12,font:{size:12}}} },
+    scales:{ x:{stacked:!!stacked,ticks:{color:muted,font:{size:11}},grid:{display:false},border:{color:cssv('--baseline')}},
+      y:{stacked:!!stacked,beginAtZero:true,ticks:{color:muted,font:{size:11}},grid:{color:grid},border:{display:false},title:{display:true,text:yTitle,color:muted,font:{size:11}}} } };
+}
+
+function buildKpis(){
+  const totGw=LOST.reduce((s,f)=>s+f.gw,0);
+  const byCls={}; CLS.forEach(c=>byCls[c.key]=0); LOST.forEach(f=>byCls[f.cls]=(byCls[f.cls]||0)+f.gw);
+  const near=LOST.filter(f=>pipeBucket(f.pipe_mi)==='near').reduce((s,f)=>s+f.gw,0);
+  const topType=CLS.slice().sort((a,b)=>byCls[b.key]-byCls[a.key])[0];
+  const tiles=[
+    {label:'Capacity leaving 2026–28', val:fmt(totGw,0), unit:'GW', note:LOST.length+' sites'},
+    {label:'Biggest type', val:fmt(byCls[topType.key],0), unit:'GW', note:topType.label+' — '+fmt(100*byCls[topType.key]/totGw,0)+'% of GW'},
+    {label:'Within 5 mi of gas pipeline', val:fmt(100*near/totGw,0), unit:'%', note:fmt(near,0)+' GW could self-generate'},
+    {label:'Cancelled vs delayed-out', val:fmt(LOST.filter(f=>f.status==='cancelled').reduce((s,f)=>s+f.gw,0),0), unit:'GW', note:'cancelled; rest delayed to 2029+'},
+  ];
+  document.getElementById('kpis').innerHTML = tiles.map(t =>
+    '<div class="kpi"><div class="label">'+t.label+'</div><div class="val">'+t.val+' <span class="unit">'+t.unit+'</span></div><div class="note">'+t.note+'</div></div>').join('');
+}
+
+let typeMeasure='gw';
+function buildByType(){
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+  const agg={}; CLS.forEach(c=>agg[c.key]={cancelled:{n:0,gw:0}, delayed:{n:0,gw:0}});
+  LOST.forEach(f=>{ const s=f.status==='cancelled'?'cancelled':'delayed'; agg[f.cls][s].n+=1; agg[f.cls][s].gw+=f.gw; });
+  const val=(k,s)=> typeMeasure==='gw'? +agg[k][s].gw.toFixed(2) : agg[k][s].n;
+  const labels=CLS.map(c=>c.label);
+  charts.push(new Chart(document.getElementById('byType'), {
+    type:'bar',
+    data:{labels, datasets:[
+      {label:'Cancelled', data:CLS.map(c=>val(c.key,'cancelled')), backgroundColor:cssv('--critical'), stack:'s', borderWidth:0},
+      {label:'Delayed to 2029+', data:CLS.map(c=>val(c.key,'delayed')), backgroundColor:cssv('--warning'), stack:'s', borderWidth:0},
+    ]},
+    options: Object.assign(baseOpts(text,muted,grid, typeMeasure==='gw'?'GW':'# sites', true), {
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw, typeMeasure==='gw'?1:0)+(typeMeasure==='gw'?' GW':' sites')}} } })
+  }));
+  const byCls={}; CLS.forEach(c=>byCls[c.key]=agg[c.key].cancelled.gw+agg[c.key].delayed.gw);
+  const top=CLS.slice().sort((a,b)=>byCls[b.key]-byCls[a.key])[0];
+  document.getElementById('type-take').innerHTML =
+    '<b>'+top.label+'</b> is the largest slice of the capacity leaving the window (<b>'+fmt(byCls[top.key],1)+' GW</b>). '+
+    'Outright cancellations concentrate in <b>self-built and leasing</b> paper campuses; neocloud exposure is comparatively small.';
+}
+document.querySelectorAll('#type-controls button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#type-controls button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); typeMeasure=b.dataset.m;
+  const i=charts.findIndex(c=>c.canvas&&c.canvas.id==='byType'); if(i>=0){charts[i].destroy();charts.splice(i,1);} buildByType();
+}));
+
+const SZ=[{k:'<0.1',lo:0,hi:0.1},{k:'0.1–0.25',lo:0.1,hi:0.25},{k:'0.25–0.5',lo:0.25,hi:0.5},
+  {k:'0.5–1',lo:0.5,hi:1},{k:'1–2',lo:1,hi:2},{k:'2+',lo:2,hi:Infinity}];
+function buildBySize(){
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+  const acc={}; CLS.forEach(c=>acc[c.key]=SZ.map(()=>0));
+  LOST.forEach(f=>{ const bi=SZ.findIndex(b=>f.gw>=b.lo&&f.gw<b.hi); if(bi>=0) acc[f.cls][bi]+=f.gw; });
+  charts.push(new Chart(document.getElementById('bySize'), {
+    type:'bar',
+    data:{labels:SZ.map(b=>b.k), datasets:CLS.map(c=>({label:c.label, data:acc[c.key].map(v=>+v.toFixed(2)), backgroundColor:cssv(c.c), stack:'s', borderWidth:0}))},
+    options: Object.assign(baseOpts(text,muted,grid,'GW',true), {
+      scales:{ x:{stacked:true,ticks:{color:muted,font:{size:11}},grid:{display:false},border:{color:cssv('--baseline')},title:{display:true,text:'Site size (GW)',color:muted,font:{size:11}}},
+        y:{stacked:true,beginAtZero:true,ticks:{color:muted,font:{size:11}},grid:{color:grid},border:{display:false},title:{display:true,text:'GW',color:muted,font:{size:11}}} },
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw,1)+' GW'}} } })
+  }));
+  const big=LOST.filter(f=>f.gw>=1).reduce((s,f)=>s+f.gw,0), tot=LOST.reduce((s,f)=>s+f.gw,0);
+  document.getElementById('size-take').innerHTML =
+    'The lost capacity is dominated by <b>large speculative campuses</b>: sites of 1 GW or more account for <b>'+fmt(big,0)+' GW</b> (<b>'+fmt(100*big/tot,0)+'%</b>) of the total &mdash; the biggest, least-committed projects are the ones that fall out of the window.';
+}
+
+function pipeAgg(){ const a={}; CLS.forEach(c=>a[c.key]={near:0,mid:0,far:0}); LOST.forEach(f=>a[f.cls][pipeBucket(f.pipe_mi)]+=f.gw); return a; }
+function buildByPipe(){
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline'); const a=pipeAgg();
+  charts.push(new Chart(document.getElementById('byPipe'), {
+    type:'bar',
+    data:{labels:PIPES.map(p=>p.label), datasets:CLS.map(c=>({label:c.label, data:PIPES.map(p=>+a[c.key][p.key].toFixed(2)), backgroundColor:cssv(c.c), stack:'s', borderWidth:0}))},
+    options: Object.assign(baseOpts(text,muted,grid,'GW',true), {
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw,1)+' GW'}} } })
+  }));
+}
+function buildTypePipe(){
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline'); const a=pipeAgg();
+  charts.push(new Chart(document.getElementById('typePipe'), {
+    type:'bar',
+    data:{labels:CLS.map(c=>c.label), datasets:PIPES.map(p=>({label:p.label, data:CLS.map(c=>+a[c.key][p.key].toFixed(2)), backgroundColor:cssv(p.c), stack:'s', borderWidth:0}))},
+    options: Object.assign(baseOpts(text,muted,grid,'GW',true), {
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw,1)+' GW'}} } })
+  }));
+  const tot=LOST.reduce((s,f)=>s+f.gw,0);
+  const near=LOST.filter(f=>pipeBucket(f.pipe_mi)==='near').reduce((s,f)=>s+f.gw,0);
+  document.getElementById('pipe-take').innerHTML =
+    '<b>'+fmt(100*near/tot,0)+'%</b> of the lost capacity (<b>'+fmt(near,0)+' GW</b>) sits within 5 miles of a gas pipeline &mdash; so most of it could, in principle, have added on-site gas generation (the shortfall analysis’s &ldquo;Nat Gas Turbines&rdquo; solution). Access to gas clearly was not the binding constraint on these projects.';
+}
+
+function buildAll(){ buildByType(); buildBySize(); buildByPipe(); buildTypePipe(); }
+function rebuild(){ charts.forEach(c=>c.destroy()); charts=[]; buildAll(); }
+document.getElementById('src-line').textContent =
+  'Source: ' + DATA.meta.model_source + ' — ' + DATA.meta.model_file + ' (NA Data Center Supply, US, original online 2026–2028) · SemiAnalysis as of ' + DATA.meta.model_asof + ' · ' + LOST.length + ' sites leaving the window.';
+buildKpis(); buildAll();
+if (window.matchMedia) { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rebuild); }
+</script>
+</body>
+</html>

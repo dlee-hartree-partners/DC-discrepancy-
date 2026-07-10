@@ -108,7 +108,7 @@
 <body data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
 <div class="wrap">
   <nav class="pagenav">
-    <a href="dashboard.html">Supply vs Shortfall</a>
+    <a href="dashboard.html">Morgan Stanley vs SemiAnalysis</a>
     <a href="chips_dashboard.html">Chips &amp; Buildout</a>
     <a href="compute_dashboard.html" class="active">Compute &amp; Energy</a>
     <a href="synthesis_dashboard.html">Synthesis</a>
@@ -116,6 +116,8 @@
     <a href="flows_dashboard.html">Flows &amp; Patterns</a>
     <a href="chippower_dashboard.html">Chip Power &amp; Energy</a>
     <a href="delayed_dashboard.html">Cancelled &amp; Delayed</a>
+    <a href="cancelledprofile_dashboard.html">Cancelled Profile</a>
+    <a href="shortfallmath_dashboard.html">Shortfall Math</a>
   </nav>
   <header>
     <h1>AI Compute &amp; Energy Over Time</h1>
@@ -412,7 +414,7 @@ function buildAll(){
 function rebuild(){ while(charts.length){charts.pop().destroy();} buildAll(); }
 
 document.getElementById('src-line').textContent =
-  'Sources: ' + DATA.meta.client_file + ' (Power Summary, Compute Demand); ' + DATA.meta.model_file + ' (AI Demand by Customer).';
+  'Sources: ' + DATA.meta.client_source + ' — ' + DATA.meta.client_file + ' (Power Summary, Compute Demand); ' + DATA.meta.model_source + ' — ' + DATA.meta.model_file + ' (AI Demand by Customer).';
 
 buildAll();
 if (window.matchMedia) {

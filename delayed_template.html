@@ -166,7 +166,7 @@
 <body data-palette="#2a78d6,#1baf7a,#eda100,#008300,#4a3aa7,#e34948,#e87ba4,#eb6834">
 <div class="wrap">
   <nav class="pagenav">
-    <a href="dashboard.html">Supply vs Shortfall</a>
+    <a href="dashboard.html">Morgan Stanley vs SemiAnalysis</a>
     <a href="chips_dashboard.html">Chips &amp; Buildout</a>
     <a href="compute_dashboard.html">Compute &amp; Energy</a>
     <a href="synthesis_dashboard.html">Synthesis</a>
@@ -174,6 +174,8 @@
     <a href="flows_dashboard.html">Flows &amp; Patterns</a>
     <a href="chippower_dashboard.html">Chip Power &amp; Energy</a>
     <a href="delayed_dashboard.html" class="active">Cancelled &amp; Delayed</a>
+    <a href="cancelledprofile_dashboard.html">Cancelled Profile</a>
+    <a href="shortfallmath_dashboard.html">Shortfall Math</a>
   </nav>
   <header>
     <h1>US Data Centers &mdash; Cancelled &amp; Delayed</h1>
@@ -183,10 +185,10 @@
 
   <div class="banner">
     <b>Scope: only sites whose <u>original</u> online date (col BY, &ldquo;Start of operations&rdquo;) fell in 2026&ndash;2028.</b>
-    The model has no status flag, so status is derived: <b style="color:var(--cancel)">cancelled</b> = the model's live date (col CC)
+    SemiAnalysis has no status flag, so status is derived: <b style="color:var(--cancel)">cancelled</b> = the SemiAnalysis live date (col CC)
     is a far-future sentinel (&ge;2034) or blank while capacity is still planned; <b style="color:var(--delay-hi)">delayed</b> = the live date
     slips &gt;3 months past the original, colored on a <b>yellow&rarr;red</b> gradient by the length of the slip.
-    Because most real cancellations were killed <i>pre-construction</i> by local opposition, the model under-counts them &mdash; so
+    Because most real cancellations were killed <i>pre-construction</i> by local opposition, SemiAnalysis under-counts them &mdash; so
     <b>externally-reported cancellations/delays are overlaid as ringed markers</b> (hover for the source), including a cluster in Indiana.
     Faint brown lines are the EIA gas-pipeline network (same basemap as the Geography page). Energy uses the model's own 8760h &times; utilization &times; PUE.
   </div>
@@ -240,21 +242,35 @@
 
   <div class="card">
     <h2>3. Does this contest the shortfall's &ldquo;under construction&rdquo; line? <span id="verdict-tag"></span></h2>
-    <p class="cap">The client's waterfall (page 1) is <b>demand 67.6 &minus; DC under-construction 14.9 &minus; grid access 15.0 = 37.7 GW</b> shortfall, and it treats that under-construction capacity as reliably online in the window. So the test is: of the capacity slipping here, how much is <b>committed (under construction)</b> vs <b>paper (Planned)</b>, and does the revised date still land <b>by 2028</b> or slip <b>past 2028</b>? <span class="cell">(cross-source: model NA Data Center Supply col BV/CD/CC vs client US Shortfall Analysis)</span></p>
+    <p class="cap">Morgan Stanley's waterfall (page 1) is <b>demand 67.6 &minus; DC under-construction 14.9 &minus; grid access 15.0 = 37.7 GW</b> of data-center power capacity still needed, and it treats that under-construction capacity as reliably online in the window. So the test is: of the SemiAnalysis capacity slipping here, how much is <b>committed (under construction)</b> vs <b>paper (Planned)</b>, and does the revised date still land <b>by 2028</b> or slip <b>past 2028</b>? <span class="cell">(SemiAnalysis NA Data Center Supply col BV/CD/CC vs Morgan Stanley US Shortfall Analysis)</span></p>
     <div class="chart-box tall" style="height:300px"><canvas id="shortfall"></canvas></div>
     <p class="takeaway" id="short-take"></p>
+  </div>
+
+  <div class="section-label">Site sizes &mdash; committed vs paper</div>
+
+  <div class="card">
+    <h2>4. Size distribution of the slipping sites: Under Construction vs Planned</h2>
+    <p class="cap">How the sites originally due 2026&ndash;28 break down by size (GW), split into committed (Under Construction) and paper (Planned). Toggle count vs GW. <span class="cell">(NA Data Center Supply: col CE per site; phase from col BV)</span></p>
+    <div class="controls" id="size-controls">
+      <span class="lbl">Measure</span>
+      <button data-sz="count" class="active"># sites</button>
+      <button data-sz="gw">GW</button>
+    </div>
+    <div class="chart-box"><canvas id="sizehist"></canvas></div>
+    <p class="takeaway" id="size-take"></p>
   </div>
 
   <div class="section-label">Externally reported cancellations &amp; delays <span style="color:var(--muted); text-transform:none; letter-spacing:0; font-size:11px;">&mdash; cited</span></div>
 
   <div class="card">
-    <h2>4. Named projects reported cancelled or delayed</h2>
+    <h2>5. Named projects reported cancelled or delayed</h2>
     <p class="cap">Specific US projects with public reporting (these are the ringed markers on the map). Many were killed pre-construction by local opposition and are not in the supply model. &ldquo;Model GW&rdquo; = that operator's in-model delayed+cancelled capacity (company-level context). Coordinates are approximate city/county centroids. Click a project for the source.</p>
     <div id="cite-table"></div>
   </div>
 
   <div class="card">
-    <h2>5. Portfolio / analyst-level pullbacks</h2>
+    <h2>6. Portfolio / analyst-level pullbacks</h2>
     <p class="cap">Aggregate reports of pullbacks and the debate over how much is real.</p>
     <ul class="macro" id="macro"></ul>
   </div>
@@ -483,10 +499,48 @@ function buildShortfall(){
     '<span style="font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;vertical-align:2px;background:'+alpha(good,0.16)+';color:'+good+';border:1px solid '+alpha(good,0.4)+'">No — the UC line holds</span>';
   document.getElementById('short-take').innerHTML =
     '<b>No &mdash; these numbers don’t contest the ~15 GW under-construction assumption; if anything they support it.</b> '+
-    'The model shows <b>'+fmt(rec.model_us_uc,1)+' GW</b> of US capacity under construction (more than the <b>'+fmt(rec.client_uc,1)+' GW</b> the shortfall credits), and of the UC originally due 2026&ndash;28, <b>'+fmt(sf.uc.by2028,1)+' GW still lands by 2028</b> &mdash; only <b>'+fmt(sf.uc.past2028,2)+' GW</b> slips past the window and <b>none</b> is cancelled. '+
+    'SemiAnalysis shows <b>'+fmt(rec.model_us_uc,1)+' GW</b> of US capacity under construction (more than the <b>'+fmt(rec.client_uc,1)+' GW</b> Morgan Stanley credits), and of the UC originally due 2026&ndash;28, <b>'+fmt(sf.uc.by2028,1)+' GW still lands by 2028</b> &mdash; only <b>'+fmt(sf.uc.past2028,2)+' GW</b> slips past the window and <b>none</b> is cancelled. '+
     'The delays and cancellations fall almost entirely on <b>Planned (paper) capacity</b>: <b>'+fmt(sf.planned.past2028,1)+' GW</b> pushed past 2028 plus <b>'+fmt(sf.planned.cancelled,1)+' GW</b> cancelled (&asymp; '+fmt(plLeaves,0)+' GW leaving the window vs just '+fmt(ucLeaves,1)+' GW of UC). '+
-    'The waterfall never credited that planned capacity, so the <b>37.7 GW shortfall stands</b> &mdash; what erodes is the supply model’s apparent <i>surplus</i> over it (page 1’s ~6&times; &ldquo;coverage&rdquo; from a 228 GW planned pipeline), not the shortfall itself.';
+    'Morgan Stanley never credited that Planned capacity. On the time-aligned bridge, SemiAnalysis provides <b>'+fmt(rec.model_us_incremental_vs_client_gw,1)+' GW</b> beyond Morgan Stanley-credited UC, leaving <b>'+fmt(rec.time_aligned_residual_gw,1)+' GW</b> of power capacity still needed before grid overlap. The <b>'+fmt(rec.model_us_pluc,0)+' GW</b> SemiAnalysis all-year pipeline is exposure, not capacity delivered by 2028.';
 }
+
+// --- size distribution: UC vs Planned ---
+const SZ_BUCKETS = [{k:'<0.1',lo:0,hi:0.1},{k:'0.1–0.25',lo:0.1,hi:0.25},{k:'0.25–0.5',lo:0.25,hi:0.5},
+  {k:'0.5–1',lo:0.5,hi:1},{k:'1–2',lo:1,hi:2},{k:'2+',lo:2,hi:Infinity}];
+let szMeasure='count';
+function buildSizeHist(){
+  const labels=SZ_BUCKETS.map(b=>b.k);
+  const acc={uc:SZ_BUCKETS.map(()=>({n:0,gw:0})), pl:SZ_BUCKETS.map(()=>({n:0,gw:0}))};
+  facs.forEach(f=>{
+    const bi=SZ_BUCKETS.findIndex(b=>f.gw>=b.lo && f.gw<b.hi); if(bi<0) return;
+    const key=f.uc?'uc':'pl'; acc[key][bi].n+=1; acc[key][bi].gw+=f.gw;
+  });
+  const pick=arr=>arr.map(x=> szMeasure==='count'?x.n:+x.gw.toFixed(2));
+  const text=cssv('--text-primary'), muted=cssv('--muted'), grid=cssv('--gridline');
+  charts.push(new Chart(document.getElementById('sizehist'), {
+    type:'bar',
+    data:{labels, datasets:[
+      {label:'Under construction', data:pick(acc.uc), backgroundColor:cssv('--series-6'), borderRadius:3, borderSkipped:false},
+      {label:'Planned', data:pick(acc.pl), backgroundColor:cssv('--delay-hi'), borderRadius:3, borderSkipped:false},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{color:text,usePointStyle:true,boxWidth:12}},
+        tooltip:{callbacks:{label:(i)=>i.dataset.label+': '+fmt(i.raw, szMeasure==='count'?0:1)+(szMeasure==='count'?' sites':' GW')}} },
+      scales:{ x:{ticks:{color:muted,font:{size:11}},grid:{display:false},border:{color:cssv('--baseline')},title:{display:true,text:'Site size (GW, Planned+UC)',color:muted,font:{size:11}}},
+        y:{beginAtZero:true,ticks:{color:muted,font:{size:11}},grid:{color:grid},border:{display:false},title:{display:true,text:szMeasure==='count'?'# sites':'GW',color:muted,font:{size:11}}} } }
+  }));
+  const nUC=facs.filter(f=>f.uc).length, nPL=facs.length-nUC;
+  const gwUC=facs.filter(f=>f.uc).reduce((s,f)=>s+f.gw,0), gwPL=facs.reduce((s,f)=>s+f.gw,0)-gwUC;
+  document.getElementById('size-take').innerHTML =
+    'Under-construction sites are small and incremental &mdash; <b>'+nUC+'</b> of them for just <b>'+fmt(gwUC,0)+' GW</b>, almost all under 0.25 GW. '+
+    'The <b>Planned</b> pipeline is the opposite: <b>'+nPL+'</b> sites totalling <b>'+fmt(gwPL,0)+' GW</b>, weighted toward big 0.5&ndash;2+ GW speculative campuses &mdash; exactly the capacity most exposed to delay and cancellation.';
+}
+document.querySelectorAll('#size-controls button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#size-controls button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); szMeasure=b.dataset.sz;
+  const i=charts.findIndex(c=>c.canvas && c.canvas.id==='sizehist'); if(i>=0){ charts[i].destroy(); charts.splice(i,1); }
+  buildSizeHist();
+}));
 
 // --- cited table + macro ---
 function buildCiteTable(){
@@ -518,11 +572,11 @@ function buildMapTake(){
     'The externally-cited cancellations &mdash; a dense cluster in <b>Indiana</b> (Google, QTS, New Carlisle, Valparaiso, Hancock County) plus Virginia, Wisconsin, North Carolina and Texas &mdash; were mostly killed by local opposition <i>before</i> construction, so they never carried a live date in the model.';
 }
 
-function rebuild(){ charts.forEach(c=>c.destroy()); charts=[]; buildMap(); buildHist(); buildShortfall(); }
+function rebuild(){ charts.forEach(c=>c.destroy()); charts=[]; buildMap(); buildHist(); buildShortfall(); buildSizeHist(); }
 document.getElementById('src-line').textContent =
-  'Source: ' + DATA.meta.model_file + ' (NA Data Center Supply, US, original online 2026–2028) · model as of ' + DATA.meta.model_asof + ' · external cancellations/delays cited inline.';
+  'Source: ' + DATA.meta.model_source + ' — ' + DATA.meta.model_file + ' (NA Data Center Supply, US, original online 2026–2028) · SemiAnalysis as of ' + DATA.meta.model_asof + ' · external cancellations/delays cited inline.';
 setupZoom('map');
-buildKpis(); buildMap(); buildHist(); buildShortfall(); buildMapTake(); buildCiteTable(); buildMacro();
+buildKpis(); buildMap(); buildHist(); buildShortfall(); buildSizeHist(); buildMapTake(); buildCiteTable(); buildMacro();
 if (window.matchMedia) { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rebuild); }
 </script>
 </body>
